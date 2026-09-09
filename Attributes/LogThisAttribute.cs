@@ -1,66 +1,98 @@
-﻿using LogThis.Interfaces;
+﻿using JsonMasking;
+using LogThis.Entities;
+using LogThis.Extensions;
+using LogThis.Interfaces;
 using MethodBoundaryAspect.Fody.Attributes;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace LogThis.Attributes
 {
     [AttributeUsage(validOn: AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
     public sealed class LogThisAttribute : OnMethodBoundaryAspect
     {
-
         #region Private Properties
 
-        private static ILogger? _logger;
+        private static List<IMessageComponentBuilder> componentBuilders;
 
         private static ILogThisConfiguration? config;
+
+        private static ILogger? logger;
+
+        private static JsonSerializerSettings SerializerSettings => new()
+        {
+            NullValueHandling = NullValueHandling.Ignore,
+            MissingMemberHandling = MissingMemberHandling.Ignore
+        };
 
         #endregion
 
         #region Private Methods
 
-        private object[] BuildArgs(MethodExecutionArgs arg)
+        private static LogParameters BuildLogParameters(IAccessPointConfiguration accessPointConfig, MethodExecutionArgs arg)
         {
-            List<object> args = [];
+            LogParameters logParameters = new(config.MessageDelimeter);
 
-            if (config.UseClassName)
+            foreach (IMessageComponentBuilder builder in componentBuilders)
             {
-                args.Add(arg.Method.DeclaringType.Name);
-            }
-            if (config.UseMethodName)
-            {
-                args.Add(arg.Method.Name);
+                if (builder.IncludeThisBuilder(accessPointConfig))
+                {
+                    logParameters.AddMessage(builder.Message);
+                    logParameters.AddArgs(builder.BuildArg(arg));
+                }
             }
 
-            return [.. args];
+            logParameters.AddMessageComponents(config.MessageComponents);
+
+            return logParameters;
         }
 
-        private string BuildMessage(string interceptMessage)
+        private static void LogMessage(IAccessPointConfiguration accessPointConfig, MethodExecutionArgs arg)
         {
-            List<string> messageComponents = [];
+            ArgumentNullException.ThrowIfNull(logger);
+            ArgumentNullException.ThrowIfNull(config);
 
-            messageComponents.Add(interceptMessage);
-
-            if (config.UseClassName)
+            try
             {
-                messageComponents.Add("{Class}");
-            }
-            if (config.UseMethodName)
-            {
-                messageComponents.Add("{Name}");
-            }
+                LogParameters logParameters = BuildLogParameters(accessPointConfig, arg);
 
-            return string.Join(" | ", messageComponents);
+                if (accessPointConfig is OnExceptionConfiguration)
+                {
+                    logger?.Log(accessPointConfig.LogLevel, arg.Exception, logParameters.Message, logParameters.Args);
+                }
+                else
+                {
+                    logger?.Log(accessPointConfig.LogLevel, logParameters.Message, logParameters.Args);
+                }
+            }
+            catch (Exception e)
+            {
+                if (config.DebugLogThis)
+                {
+                    logger?.LogDebug(e, e.Message, e.StackTrace);
+                }
+            }
         }
 
-        private void LogMessage(LogLevel logLevel, string interceptMessage, MethodExecutionArgs arg)
+        private static string MaskJson(object obj)
         {
-            if (logLevel != LogLevel.None && _logger.IsEnabled(logLevel))
-            {
-                string message = BuildMessage(interceptMessage);
-                object[] args = BuildArgs(arg);
+            string jsonContent = obj != null ? JsonConvert.SerializeObject(obj, SerializerSettings) : string.Empty;
 
-                _logger?.Log(logLevel, message, args);
+            if (jsonContent.IsValidJson())
+            {
+                string[] blackList = [.. config.JsonFieldsToMask];
+                string mask = config.JsonMaskValue;
+
+                string maskedJsonContent = jsonContent.MaskFields(blackList, mask).Replace("\r\n", "");
+                while (maskedJsonContent.Contains("  "))
+                {
+                    maskedJsonContent = maskedJsonContent.Replace("  ", " ");
+                }
+
+                return maskedJsonContent;
             }
+
+            return jsonContent;
         }
 
         #endregion
@@ -69,24 +101,58 @@ namespace LogThis.Attributes
 
         public static void Initialize(ILogger? logger, ILogThisConfiguration? logThisConfiguration)
         {
-            _logger = logger;
+            ArgumentNullException.ThrowIfNull(logger);
+            ArgumentNullException.ThrowIfNull(logThisConfiguration);
+
+            LogThisAttribute.logger = logger;
             config = logThisConfiguration;
+            componentBuilders = config.GetComponentBuilders();
+        }
+
+        public static string MaskObject(object obj)
+        {
+            string maskedString;
+
+            if (obj is System.Collections.IList list)
+            {
+                object[] returnValues = new object[list.Count];
+                list.CopyTo(returnValues, 0);
+
+                maskedString = MaskObjects(returnValues);
+            }
+            else
+            {
+                maskedString = MaskJson(obj);
+            }
+
+            return maskedString;
+        }
+
+        public static string MaskObjects(object[] objects)
+        {
+            List<string> maskedStrings = [];
+
+            foreach (object obj in objects)
+            {
+                maskedStrings.Add(MaskJson(obj));
+            }
+
+            return $"[{string.Join(", ", maskedStrings)}]";
         }
 
         public override void OnEntry(MethodExecutionArgs arg)
         {
-
-            LogMessage(config.OnEntryLogLevel, config.OnEntryMessage, arg);
+            LogMessage(config.OnEntryConfig, arg);
         }
 
         public override void OnException(MethodExecutionArgs arg)
         {
-            _logger?.Log(config.OnExceptionLogLevel, arg.Exception, config.OnExceptionMessage, arg.Method.Name);
+            LogMessage(config.OnExceptionConfig, arg);
         }
 
         public override void OnExit(MethodExecutionArgs arg)
         {
-            LogMessage(config.OnExitLogLevel, config.OnExitMessage, arg);
+            LogMessage(config.OnExitConfig, arg);
         }
 
         #endregion

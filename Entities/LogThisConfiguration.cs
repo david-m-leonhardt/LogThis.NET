@@ -1,45 +1,75 @@
-﻿using LogThis.Interfaces;
-using Microsoft.Extensions.Logging;
+﻿using LogThis.Constants;
+using LogThis.Extensions;
+using LogThis.Interfaces;
 
 namespace LogThis.Entities
 {
-    public sealed class LogThisConfiguration : ILogThisConfiguration
+    public sealed class LogThisConfiguration() : ILogThisConfiguration
     {
+        List<(bool, IMessageComponentBuilder)> ComponentBuilders =>
+        [
+            (OnEntryConfig.LogAccessPoint, OnEntryConfig as IMessageComponentBuilder),
+            (OnExceptionConfig.LogAccessPoint, OnExceptionConfig as IMessageComponentBuilder),
+            (OnExitConfig.LogAccessPoint, OnExitConfig as IMessageComponentBuilder),
+            (LogClassName, new ClassComponentBuilder()),
+            (LogMethodName, new MethodComponentBuilder()),
+            (LogMethodArguments, new ArgumentComponentBuilder()),
+            (LogMethodReturnValue, new ReturnValueComponentBuilder())
+        ];
+
         #region Public Properties
 
-        public LogLevel OnEntryLogLevel { get; set; }
+        public bool DebugLogThis { get; set; } = false;
 
-        public string OnEntryMessage { get; set; }
+        public List<string> JsonFieldsToMask { get; set; } = [];
 
-        public LogLevel OnExceptionLogLevel { get; set; }
+        public string JsonMaskValue { get; set; } = MessageComponentConstants.DefaultJsonMaskValue;
 
-        public string OnExceptionMessage { get; set; }
+        public bool LogClassName { get; set; } = false;
 
-        public LogLevel OnExitLogLevel { get; set; }
+        public bool LogMethodArguments { get; set; } = false;
 
-        public string OnExitMessage { get; set; }
+        public bool LogMethodName { get; set; } = true;
 
-        public bool UseClassName { get; set; }
+        public bool LogMethodReturnValue { get; set; }
 
-        public bool UseMethodName { get; set; }
+        public Dictionary<string, object> MessageComponents { get; } = [];
+
+        public string MessageDelimeter { get; set; } = MessageComponentConstants.DefaultDelimeter;
+
+        public IAccessPointConfiguration OnEntryConfig { get; set; } = new OnEntryConfiguration();
+
+        public IAccessPointConfiguration OnExceptionConfig { get; set; } = new OnExceptionConfiguration();
+
+        public IAccessPointConfiguration OnExitConfig { get; set; } = new OnExitConfiguration();
 
         #endregion
 
-        #region Constructor
+        #region Public Methods
 
-        public LogThisConfiguration()
+        public void AddMessageComponents(Dictionary<string, object> messageComponents)
         {
-            OnEntryLogLevel = LogLevel.Information;
-            OnEntryMessage = "Entered";
-            OnExceptionLogLevel = LogLevel.Warning;
-            OnExceptionMessage = "Exception";
-            OnExitLogLevel = LogLevel.Information;
-            OnExitMessage = "Exited";
-            UseClassName = false;
-            UseMethodName = true;
+            foreach (var component in messageComponents)
+            {
+                MessageComponents.Add(component.Key.PrepComponentName(), component.Value);
+            }
+        }
+
+        public List<IMessageComponentBuilder> GetComponentBuilders()
+        {
+            List<IMessageComponentBuilder> componentBuilders = [];
+
+            ComponentBuilders.ForEach(builder =>
+            {
+                if (builder.Item1)
+                {
+                    componentBuilders.Add(builder.Item2);
+                }
+            });
+
+            return componentBuilders;
         }
 
         #endregion
-
     }
 }

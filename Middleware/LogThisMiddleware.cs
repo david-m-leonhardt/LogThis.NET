@@ -1,4 +1,5 @@
 ﻿using LogThis.Attributes;
+using LogThis.Constants;
 using LogThis.Entities;
 using LogThis.Interfaces;
 using Microsoft.AspNetCore.Builder;
@@ -17,31 +18,64 @@ namespace LogThis.Middleware
             {
                 AddLogThisConfiguration(services, new LogThisConfiguration());
             }
+
             public void AddLogThisConfiguration(ILogThisConfiguration logThisConfiguration)
             {
                 services.AddSingleton(logThisConfiguration);
             }
+
             public void AddLogThisConfiguration(
+                bool DebugLogThis = false,
+                List<string> JsonFieldsToMask = null,
+                string JsonMaskValue = MessageComponentConstants.DefaultJsonMaskValue,
+                bool LogClassName = false,
+                bool LogMethodArguments = false,
+                bool LogMethodName = true,
+                bool LogMethodReturnValue = false,
+                bool LogOnEntry = true,
+                bool LogOnException = true,
+                bool LogOnExit = true,
+                Dictionary<string, object> MessageComponents = null,
+                string MessageDelimeter = MessageComponentConstants.DefaultDelimeter,
                 LogLevel OnEntryLogLevel = LogLevel.Information,
-                string OnEntryMessage = "Entered",
-                LogLevel OnExceptionLogLevel = LogLevel.Warning,
-                string OnExceptionMessage = "Exception",
+                string OnEntryMessage = AccessPointConstants.EnteredMessage,
+                LogLevel OnExceptionLogLevel = LogLevel.Error,
+                string OnExceptionMessage = AccessPointConstants.ExceptionMessage,
                 LogLevel OnExitLogLevel = LogLevel.Information,
-                string OnExitMessage = "Exited",
-                bool UserClassName = false,
-                bool UseMethodName = true)
+                string OnExitMessage = AccessPointConstants.ExitMessage
+                )
             {
-                ILogThisConfiguration logThisConfiguration = new LogThisConfiguration()
+                LogThisConfiguration logThisConfiguration = new()
                 {
-                    OnEntryLogLevel = OnEntryLogLevel,
-                    OnEntryMessage = OnEntryMessage,
-                    OnExceptionLogLevel = OnExceptionLogLevel,
-                    OnExceptionMessage = OnExceptionMessage,
-                    OnExitLogLevel = OnExitLogLevel,
-                    OnExitMessage = OnExitMessage,
-                    UseClassName = UserClassName,
-                    UseMethodName = UseMethodName
+                    DebugLogThis = DebugLogThis,
+                    JsonFieldsToMask = JsonFieldsToMask ?? [],
+                    JsonMaskValue = JsonMaskValue,
+                    LogClassName = LogClassName,
+                    LogMethodArguments = LogMethodArguments,
+                    LogMethodName = LogMethodName,
+                    LogMethodReturnValue = LogMethodReturnValue,
+                    MessageDelimeter = MessageDelimeter,
+                    OnEntryConfig = new OnEntryConfiguration
+                    {
+                        AccessPointMessage = OnEntryMessage,
+                        LogAccessPoint = LogOnEntry,
+                        LogLevel = OnEntryLogLevel
+                    },
+                    OnExceptionConfig = new OnExceptionConfiguration
+                    {
+                        AccessPointMessage = OnExceptionMessage,
+                        LogAccessPoint = LogOnException,
+                        LogLevel = OnExceptionLogLevel
+                    },
+                    OnExitConfig = new OnExitConfiguration
+                    {
+                        AccessPointMessage = OnExitMessage,
+                        LogAccessPoint = LogOnExit,
+                        LogLevel = OnExitLogLevel
+                    }
                 };
+
+                logThisConfiguration.AddMessageComponents(MessageComponents);
 
                 AddLogThisConfiguration(services, logThisConfiguration);
             }
@@ -51,8 +85,9 @@ namespace LogThis.Middleware
         {
             public void UseLogThis()
             {
-                UseLogThis(app, "LogThis");
+                UseLogThis(app, MessageComponentConstants.DefaultCategoryName);
             }
+
             public void UseLogThis(string categoryName)
             {
                 ILoggerFactory? loggerFactory = app.Services.GetService<ILoggerFactory>();

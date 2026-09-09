@@ -4,7 +4,22 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <NoWarn>1701;1702;IDE0130;CA2254</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <NoWarn>1701;1702;IDE0130;CA2254</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Entities\LogThisHelper.cs" />
+    <Compile Remove="Entities\NamedArg.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="JsonMasking" Version="2.0.0" />
@@ -15,6 +30,10 @@
   <ItemGroup>
     <None Update="FodyWeavers.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="LICENSE">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
     </None>
   </ItemGroup>
 

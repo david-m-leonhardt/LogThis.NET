@@ -1,26 +1,40 @@
-﻿using Microsoft.Extensions.Logging;
-
-namespace LogThis.Interfaces
+﻿namespace LogThis.Interfaces
 {
     public interface ILogThisConfiguration
     {
         #region Properties
 
-        LogLevel OnEntryLogLevel { get; set; }
+        bool DebugLogThis { get; set; }
 
-        string OnEntryMessage { get; set; }
+        List<string> JsonFieldsToMask { get; set; }
 
-        LogLevel OnExceptionLogLevel { get; set; }
+        string JsonMaskValue { get; set; }
 
-        string OnExceptionMessage { get; set; }
+        bool LogClassName { get; set; }
 
-        LogLevel OnExitLogLevel { get; set; }
+        bool LogMethodArguments { get; set; }
 
-        string OnExitMessage { get; set; }
+        bool LogMethodName { get; set; }
 
-        bool UseClassName { get; set; }
+        bool LogMethodReturnValue { get; set; }
 
-        bool UseMethodName {  get; set; }
+        Dictionary<string, object> MessageComponents { get; }
+
+        string MessageDelimeter { get; set; }
+
+        IAccessPointConfiguration OnEntryConfig { get; set; }
+
+        IAccessPointConfiguration OnExceptionConfig { get; set; }
+
+        IAccessPointConfiguration OnExitConfig { get; set; }
+
+        #endregion
+
+        #region Methods
+
+        void AddMessageComponents(Dictionary<string, object> messageComponents);
+
+        List<IMessageComponentBuilder> GetComponentBuilders();
 
         #endregion
     }
