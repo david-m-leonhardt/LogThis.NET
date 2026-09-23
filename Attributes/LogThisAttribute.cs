@@ -1,148 +1,96 @@
-﻿using JsonMasking;
-using LogThis.Entities;
-using LogThis.Extensions;
-using LogThis.Interfaces;
-using MethodBoundaryAspect.Fody.Attributes;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
+using Metalama.Framework.Advising;
+using Metalama.Framework.Aspects;
+using Metalama.Framework.Code;
 
-namespace LogThis.Attributes
+namespace LogThis.Attributes;
+
+/// <summary>
+/// Weaves entry, exit, and exception logging into a method or every public concrete method of a class.
+/// Generated calls delegate runtime work to <see cref="LogThisRuntimeLogger"/>.
+/// </summary>
+[AttributeUsage(validOn: AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
+public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
 {
-    [AttributeUsage(validOn: AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
-    public sealed class LogThisAttribute : OnMethodBoundaryAspect
+    #region Constructor
+
+    /// <summary>Creates an aspect that uses async templates for awaitable methods.</summary>
+    public LogThisAttribute()
     {
-        #region Private Properties
-
-        private static JsonSerializerSettings SerializerSettings => new()
-        {
-            NullValueHandling = NullValueHandling.Ignore,
-            MissingMemberHandling = MissingMemberHandling.Ignore
-        };
-
-        #endregion
-
-        #region Private Methods
-
-        private static LogParameters BuildLogParameters(LogThisRuntime runtime, IAccessPointConfiguration accessPointConfig, MethodExecutionArgs arg)
-        {
-            LogParameters logParameters = new(runtime.Configuration.MessageDelimeter);
-
-            foreach (IMessageComponentBuilder builder in runtime.ComponentBuilders)
-            {
-                if (builder.IncludeThisBuilder(accessPointConfig))
-                {
-                    logParameters.AddMessage(builder.Message);
-                    logParameters.AddArgs(builder.BuildArg(arg));
-                }
-            }
-
-            logParameters.AddMessageComponents(runtime.Configuration.MessageComponents);
-
-            return logParameters;
-        }
-
-        private static void LogMessage(LogThisRuntime runtime, IAccessPointConfiguration accessPointConfig, MethodExecutionArgs arg)
-        {
-            if (!accessPointConfig.LogAccessPoint) return;
-
-            try
-            {
-                LogParameters logParameters = BuildLogParameters(runtime, accessPointConfig, arg);
-
-                if (ReferenceEquals(accessPointConfig, runtime.Configuration.OnExceptionConfig))
-                {
-                    runtime.Logger.Log(accessPointConfig.LogLevel, arg.Exception, logParameters.Message, logParameters.Args);
-                }
-                else
-                {
-                    runtime.Logger.Log(accessPointConfig.LogLevel, logParameters.Message, logParameters.Args);
-                }
-            }
-            catch (Exception e)
-            {
-                if (runtime.Configuration.DebugLogThis)
-                {
-                    runtime.Logger.LogDebug(e, "LogThis failed while constructing a log message.");
-                }
-            }
-        }
-
-        private static string MaskJson(object obj)
-        {
-            string jsonContent = obj != null ? JsonConvert.SerializeObject(obj, SerializerSettings) : string.Empty;
-
-            if (jsonContent.IsValidJson())
-            {
-                LogThisRuntime runtime = LogThisRuntimeContext.Current
-                    ?? throw new InvalidOperationException("No LogThis scope is active.");
-                string[] blackList = [.. runtime.Configuration.JsonFieldsToMask];
-                string mask = runtime.Configuration.JsonMaskValue;
-
-                string maskedJsonContent = jsonContent.MaskFields(blackList, mask).Replace("\r\n", "");
-                while (maskedJsonContent.Contains("  "))
-                {
-                    maskedJsonContent = maskedJsonContent.Replace("  ", " ");
-                }
-
-                return maskedJsonContent;
-            }
-
-            return jsonContent;
-        }
-
-        #endregion
-
-        #region Public Methods  
-
-        public static string MaskObject(object obj)
-        {
-            string maskedString;
-
-            if (obj is System.Collections.IList list)
-            {
-                object[] returnValues = new object[list.Count];
-                list.CopyTo(returnValues, 0);
-
-                maskedString = MaskObjects(returnValues);
-            }
-            else
-            {
-                maskedString = MaskJson(obj);
-            }
-
-            return maskedString;
-        }
-
-        public static string MaskObjects(object[] objects)
-        {
-            List<string> maskedStrings = [];
-
-            foreach (object obj in objects)
-            {
-                maskedStrings.Add(MaskJson(obj));
-            }
-
-            return $"[{string.Join(", ", maskedStrings)}]";
-        }
-
-        public override void OnEntry(MethodExecutionArgs arg)
-        {
-            LogThisRuntime? runtime = LogThisRuntimeContext.Current;
-            if (runtime != null) LogMessage(runtime, runtime.Configuration.OnEntryConfig, arg);
-        }
-
-        public override void OnException(MethodExecutionArgs arg)
-        {
-            LogThisRuntime? runtime = LogThisRuntimeContext.Current;
-            if (runtime != null) LogMessage(runtime, runtime.Configuration.OnExceptionConfig, arg);
-        }
-
-        public override void OnExit(MethodExecutionArgs arg)
-        {
-            LogThisRuntime? runtime = LogThisRuntimeContext.Current;
-            if (runtime != null) LogMessage(runtime, runtime.Configuration.OnExitConfig, arg);
-        }
-
-        #endregion
+        UseAsyncTemplateForAnyAwaitable = true;
     }
+
+    #endregion
+
+    #region Public Methods
+
+    // Applies the method templates to eligible members of an annotated class.
+    // The explicit Metalama interface member is not included in consumer-facing XML output.
+    void IAspect<INamedType>.BuildAspect(IAspectBuilder<INamedType> builder)
+    {
+        // Class-level use advises methods; method-level use is handled by OverrideMethodAspect.
+        MethodTemplateSelector templates = new(
+            nameof(OverrideMethod),
+            nameof(OverrideAsyncMethod),
+            null, null, null, null,
+            true, false);
+
+        foreach (IMethod method in builder.Target.Methods)
+        {
+            if (method.Accessibility == Accessibility.Public && !method.IsAbstract)
+            {
+                builder.With(method).Override(templates);
+            }
+        }
+    }
+
+    /// <summary>Wraps a synchronous method with entry, exit, and exception events.</summary>
+    /// <returns>The original method's result, if any.</returns>
+    public override dynamic? OverrideMethod()
+    {
+        LogThisMethodContext context = new(
+            meta.Target.Method.Name,
+            meta.Target.Method.DeclaringType.Name,
+            meta.Target.Parameters.ToValueArray());
+
+        LogThisRuntimeLogger.Entry(context);
+
+        try
+        {
+            dynamic? result = meta.Proceed();
+            LogThisRuntimeLogger.Exit(context, result);
+            return result;
+        }
+        catch (Exception exception)
+        {
+            LogThisRuntimeLogger.Exception(context, exception);
+            throw;
+        }
+    }
+
+    /// <summary>Wraps an awaitable method and logs its completed result or failure.</summary>
+    /// <returns>The original method's result after it completes, if any.</returns>
+    public override async Task<dynamic?> OverrideAsyncMethod()
+    {
+        LogThisMethodContext context = new(
+            meta.Target.Method.Name,
+            meta.Target.Method.DeclaringType.Name,
+            meta.Target.Parameters.ToValueArray());
+
+        LogThisRuntimeLogger.Entry(context);
+
+        try
+        {
+            // Await so exit and exception events reflect the eventual outcome.
+            dynamic? result = await meta.ProceedAsync();
+            LogThisRuntimeLogger.Exit(context, result);
+            return result;
+        }
+        catch (Exception exception)
+        {
+            LogThisRuntimeLogger.Exception(context, exception);
+            throw;
+        }
+    }
+
+    #endregion
 }

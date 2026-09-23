@@ -4,33 +4,32 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <NoWarn>1701;1702;IDE0130;CA2254</NoWarn>
+    <!-- Metalama maps an XML-doc diagnostic from generated advice to the aspect source. -->
+    <NoWarn>1701;1702;IDE0130;CA2254;CS1587</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <NoWarn>1701;1702;IDE0130;CA2254</NoWarn>
+    <!-- Keep XML docs on the public aspect templates despite the generated advice diagnostic. -->
+    <NoWarn>1701;1702;IDE0130;CA2254;CS1587</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Entities\LogThisHelper.cs" />
-    <Compile Remove="Entities\NamedArg.cs" />
+    <Compile Remove="tests\**\*.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="JsonMasking" Version="2.0.0" />
-    <PackageReference Include="MethodBoundaryAspect.Fody" Version="2.0.150" />
+    <PackageReference Include="Metalama.Framework" Version="2026.1.28" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="FodyWeavers.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <None Update="LICENSE">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
