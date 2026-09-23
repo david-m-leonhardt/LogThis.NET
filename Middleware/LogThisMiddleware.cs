@@ -30,8 +30,8 @@ namespace LogThis.Middleware
             }
 
             /// <summary>Registers LogThis using individual options and event-specific settings.</summary>
-            /// <param name="DebugLogThis">Report internal logging failures at Debug level.</param>
-            /// <param name="JsonFieldsToMask">JSON property names to redact from logged values.</param>
+            /// <param name="DebugLogThis">Write internal logging failures to the console at Debug level, independently of configured providers.</param>
+            /// <param name="JsonFieldsToMask">Case-insensitive JSON property names to redact at any depth in logged values.</param>
             /// <param name="JsonMaskValue">Replacement text for redacted JSON fields.</param>
             /// <param name="LogClassName">Include the declaring class name in events.</param>
             /// <param name="LogMethodArguments">Include serialized arguments on entry and exception events.</param>

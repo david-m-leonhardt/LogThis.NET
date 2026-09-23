@@ -1,12 +1,10 @@
-using System.Collections;
-using JsonMasking;
 using LogThis.Entities;
-using LogThis.Extensions;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace LogThis.Attributes;
 
-/// <summary>Serializes logged values and masks configured JSON object fields.</summary>
+/// <summary>Serializes logged values and masks configured property names throughout the JSON tree.</summary>
 internal static class LogThisValueMasker
 {
     #region Private Properties
@@ -14,32 +12,19 @@ internal static class LogThisValueMasker
     // Omit null members before masking to match the library's logged JSON representation.
     private static readonly JsonSerializerSettings SerializerSettings = new()
     {
-        NullValueHandling = NullValueHandling.Ignore,
-        MissingMemberHandling = MissingMemberHandling.Ignore
+        NullValueHandling = NullValueHandling.Ignore
     };
 
     #endregion
 
     #region Internal Methods
 
-    /// <summary>Masks one value, splitting a top-level list into separately masked items.</summary>
-    /// <remarks>Nested lists remain inside their containing object's JSON for the masking library to process.</remarks>
+    /// <summary>Serializes one value and masks matching properties at any depth.</summary>
     /// <param name="value">Value to serialize and mask.</param>
-    /// <returns>Serialized text with configured object fields replaced.</returns>
-    internal static string MaskObject(object? value)
-    {
-        // The masking library operates on object roots, so top-level list items are handled separately.
-        if (value is IList list)
-        {
-            object?[] values = new object?[list.Count];
-            list.CopyTo(values, 0);
-            return MaskObjects(values);
-        }
+    /// <returns>Serialized JSON with matching property values replaced.</returns>
+    internal static string MaskObject(object? value) => MaskJson(value);
 
-        return MaskJson(value);
-    }
-
-    /// <summary>Serializes each argument, masks JSON object roots, and combines them as a display list.</summary>
+    /// <summary>Serializes and masks each argument, then combines them as a display list.</summary>
     /// <param name="values">Values to serialize and mask individually.</param>
     /// <returns>A bracketed list of masked serialized values.</returns>
     internal static string MaskObjects(object?[] values)
@@ -58,26 +43,49 @@ internal static class LogThisValueMasker
 
     #region Private Methods
 
-    /// <summary>Serializes an object and masks configured fields when its root is a JSON object.</summary>
-    /// <remarks>Non-object JSON roots are returned without field masking.</remarks>
+    /// <summary>Serializes a value and masks matching properties in objects and arrays recursively.</summary>
     /// <param name="value">Value to serialize.</param>
-    /// <returns>Masked JSON object text, or the serialized value for other roots.</returns>
-    /// <exception cref="InvalidOperationException">A maskable object is processed without an active LogThis scope.</exception>
+    /// <returns>Compact JSON with matched property values replaced.</returns>
+    /// <exception cref="InvalidOperationException">A value is processed without an active LogThis scope.</exception>
     private static string MaskJson(object? value)
     {
-        string json = value != null ? JsonConvert.SerializeObject(value, SerializerSettings) : string.Empty;
-        if (!json.IsValidJson()) return json;
-
         LogThisRuntime runtime = LogThisRuntimeContext.Current
             ?? throw new InvalidOperationException("No LogThis scope is active.");
-        string masked = json.MaskFields([.. runtime.Configuration.JsonFieldsToMask], runtime.Configuration.JsonMaskValue)
-            .Replace("\r\n", "");
-        while (masked.Contains("  "))
-        {
-            masked = masked.Replace("  ", " ");
-        }
+        JToken token = value == null
+            ? JValue.CreateNull()
+            : JToken.FromObject(value, JsonSerializer.Create(SerializerSettings));
+        HashSet<string> names = new(runtime.Configuration.JsonFieldsToMask, StringComparer.OrdinalIgnoreCase);
+        MaskToken(token, names, runtime.Configuration.JsonMaskValue);
+        return token.ToString(Formatting.None);
+    }
 
-        return masked;
+    /// <summary>Replaces matching property values and descends through unmatched objects and arrays.</summary>
+    /// <param name="token">Current JSON node to inspect.</param>
+    /// <param name="names">Property names to mask, compared without case sensitivity.</param>
+    /// <param name="mask">Replacement text for a matched value.</param>
+    private static void MaskToken(JToken token, HashSet<string> names, string mask)
+    {
+        if (token is JObject obj)
+        {
+            foreach (JProperty property in obj.Properties())
+            {
+                if (names.Contains(property.Name))
+                {
+                    property.Value = new JValue(mask);
+                }
+                else
+                {
+                    MaskToken(property.Value, names, mask);
+                }
+            }
+        }
+        else if (token is JArray array)
+        {
+            foreach (JToken item in array)
+            {
+                MaskToken(item, names, mask);
+            }
+        }
     }
 
     #endregion

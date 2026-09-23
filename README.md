@@ -145,9 +145,16 @@ The component switches control the structured properties added to a message:
 - `LogOnEntry`, `LogOnException`, and `LogOnExit` independently enable each
   method access point.
 
-`DebugLogThis` attempts to write a `Debug` log if message construction or a
-provider call fails. LogThis catches the original logging failure; the
-diagnostic provider call itself is not guarded against another failure.
+LogThis checks the configured provider's level for each access point before
+formatting the message or serializing its arguments or return value. The aspect
+still creates its method context and captures the argument array when the
+method is called, even if that log level is filtered out.
+
+`DebugLogThis` writes a `Debug` diagnostic to the console if message
+construction or the configured provider fails. This diagnostic uses a separate
+console logger: it does not go to the application's configured log4net, Serilog,
+NLog, or other logging provider. The console diagnostic is best-effort; its own
+failure is suppressed so it cannot replace the application's result or exception.
 
 You can also construct `LogThisConfiguration`, modify its access-point
 configurations, and register it directly:
@@ -186,8 +193,8 @@ app.UseLogThis("MyApplication.Methods");
 ### Masking sensitive fields
 
 When argument or return-value logging is enabled, values are serialized before
-they are logged. Matching JSON object fields in `JsonFieldsToMask` are replaced
-with `JsonMaskValue`:
+they are logged. Every property whose name matches `JsonFieldsToMask`
+(case-insensitively) is replaced with `JsonMaskValue`, regardless of its depth:
 
 ```csharp
 builder.Services.AddLogThisConfiguration(
@@ -198,11 +205,12 @@ builder.Services.AddLogThisConfiguration(
     MessageComponents: new Dictionary<string, object>());
 ```
 
-Arguments are serialized one value at a time. A top-level list returned by a
-method is split into items before masking. Other non-object JSON roots are
-returned without field masking, and the behavior of the masking dependency on
-nested collections has not been verified. Do not rely on this list alone to
-protect sensitive data: unlisted fields are not masked automatically. Enable
+Arguments are serialized one value at a time. Objects inside arrays, including
+nested arrays, are masked using the same rule. A matched property's entire value
+is replaced, whether that value is a scalar, object, or array. Only property
+names are supported; dotted paths, wildcards, and partial-value masking are not
+available. The original objects are not changed. Do not rely on this list alone
+to protect sensitive data: unlisted fields are not masked automatically. Enable
 argument and return-value logging only when appropriate for the data and volume
 handled by the application.
 
@@ -218,7 +226,8 @@ dotnet run --project tests/LogThis.Smoke/LogThis.Smoke.csproj -c Release
 
 The build emits `LogThis.NET.xml` alongside the library DLL for API-documentation
 tools. The smoke project checks method-level and class-level interception,
-sync and async outcomes, exceptions, and nested runtime scopes.
+sync and async outcomes, exceptions, nested runtime scopes, filtered log levels,
+and failure of an application logging provider.
 
 The `LogThis.ApiTester` and `LogThis.consoleTester` projects are development
 harnesses in sibling directories rather than supported packages.

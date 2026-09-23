@@ -1,31 +1,12 @@
-﻿using System.Text.Json;
-
 namespace LogThis.Extensions
 {
-    /// <summary>Helpers for JSON-object detection and message-template component names.</summary>
+    /// <summary>Helpers for message-template component names.</summary>
     public static class StringExtensions
     {
         #region Extension Block
-        // String extension members support the masker and custom message components.
+        // String extension members support custom message components.
         extension(string source)
         {
-            /// <summary>Returns true only for a parseable JSON object, not an array or scalar.</summary>
-            /// <returns><see langword="true"/> when the receiver is a JSON object; otherwise <see langword="false"/>.</returns>
-            public bool IsValidJson()
-            {
-                if (string.IsNullOrWhiteSpace(source)) return false;
-
-                try
-                {
-                    using JsonDocument doc = JsonDocument.Parse(source);
-                    return doc.RootElement.ValueKind == JsonValueKind.Object;
-                }
-                catch (Exception)
-                {
-                    return false;
-                }
-            }
-
             /// <summary>Wraps a custom component name in braces for a logging template.</summary>
             /// <returns>The receiver formatted as a message-template placeholder.</returns>
             public string PrepComponentName()

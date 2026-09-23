@@ -5,11 +5,11 @@
     {
         #region Properties
 
-        /// <summary>Whether internal logging failures are reported at Debug level.</summary>
+        /// <summary>Whether internal logging failures are written to the console at Debug level.</summary>
         /// <value><see langword="true"/> to report failures; otherwise <see langword="false"/>.</value>
         bool DebugLogThis { get; set; }
 
-        /// <summary>JSON property names to redact in logged values.</summary>
+        /// <summary>Case-insensitive JSON property names to redact at any depth in logged values.</summary>
         /// <value>The field names supplied by the application.</value>
         List<string> JsonFieldsToMask { get; set; }
 

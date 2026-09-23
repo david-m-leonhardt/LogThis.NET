@@ -24,7 +24,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="JsonMasking" Version="2.0.0" />
     <PackageReference Include="Metalama.Framework" Version="2026.1.28" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>

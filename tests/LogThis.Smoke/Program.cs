@@ -52,6 +52,75 @@ Require(firstHostLogs.Any(log => log.Contains("Exception", StringComparison.Ordi
 Require(firstHostLogs.Any(log => log.Contains("GetAsync", StringComparison.Ordinal)), "Class-level method was not logged.");
 Require(secondHostLogs.All(log => log.Contains("second", StringComparison.Ordinal)), "Host logs were mixed.");
 
+// Property-name masking must cover argument and return-value arrays at every depth.
+List<string> maskingLogs = [];
+ServiceCollection maskingServices = new();
+maskingServices.AddLogging(builder => builder.AddProvider(new CaptureProvider(maskingLogs)));
+maskingServices.AddLogThisConfiguration(
+    JsonFieldsToMask: ["password"],
+    JsonMaskValue: "[REDACTED]",
+    LogMethodArguments: true,
+    LogMethodReturnValue: true);
+using (ServiceProvider maskingHost = maskingServices.BuildServiceProvider())
+using (maskingHost.GetRequiredService<ILogThisScopeFactory>().BeginScope("Masking"))
+{
+    List<Credential> credentials =
+    [
+        new("outer-secret", "outer-visible",
+        [new("inner-secret", "inner-visible", [])]),
+        new("other-secret", "other-visible", [])
+    ];
+    Require(methods.Echo(credentials) == credentials, "Masking changed the method result.");
+    Require(credentials[0].Password == "outer-secret", "Masking changed the original object.");
+}
+
+Require(maskingLogs.Count == 2, "Expected entry and exit masking events.");
+Require(maskingLogs.All(log => log.Contains("[REDACTED]", StringComparison.Ordinal)),
+    "Mask value is missing from a masking event.");
+Require(maskingLogs.All(log => log.Contains("outer-visible", StringComparison.Ordinal)
+    && log.Contains("inner-visible", StringComparison.Ordinal)
+    && log.Contains("other-visible", StringComparison.Ordinal)),
+    "Masking removed an unlisted property or missed a nested list.");
+Require(maskingLogs.All(log => !log.Contains("outer-secret", StringComparison.Ordinal)
+    && !log.Contains("inner-secret", StringComparison.Ordinal)
+    && !log.Contains("other-secret", StringComparison.Ordinal)),
+    "A nested password value appeared in a log event.");
+
+// Filtering out a level must skip value serialization as well as provider emission.
+List<string> filteredLogs = [];
+ServiceCollection filteredServices = new();
+filteredServices.AddLogging(builder =>
+    builder.SetMinimumLevel(LogLevel.Critical).AddProvider(new CaptureProvider(filteredLogs)));
+filteredServices.AddLogThisConfiguration(LogMethodArguments: true, LogMethodReturnValue: true);
+using (ServiceProvider filteredHost = filteredServices.BuildServiceProvider())
+using (filteredHost.GetRequiredService<ILogThisScopeFactory>().BeginScope("Filtered"))
+{
+    SerializationProbe probe = new();
+    Require(methods.UseProbe(probe) == "ok", "Filtering changed the method result.");
+    Require(probe.ReadCount == 0, "A filtered event serialized its arguments.");
+    Require(filteredLogs.Count == 0, "A filtered event reached the provider.");
+}
+
+// A failing application provider must not prevent the method from running or replace its exception.
+ServiceCollection failingServices = new();
+failingServices.AddLogging(builder => builder.AddProvider(new ThrowingProvider()));
+failingServices.AddLogThisConfiguration(DebugLogThis: true);
+using (ServiceProvider failingHost = failingServices.BuildServiceProvider())
+using (failingHost.GetRequiredService<ILogThisScopeFactory>().BeginScope("FailingProvider"))
+{
+    Require(methods.Succeed("still running") == "still running", "A provider failure changed the method result.");
+
+    try
+    {
+        await methods.FailAsync();
+        throw new Exception("Expected method failure with a failing provider.");
+    }
+    catch (InvalidOperationException exception)
+    {
+        Require(exception.Message == "Expected failure", "A provider failure replaced the method exception.");
+    }
+}
+
 Console.WriteLine("LogThis smoke test passed.");
 
 // Give each host its own capture sink and LogThis configuration.
@@ -90,6 +159,32 @@ internal sealed class TestMethods
     {
         await Task.Yield();
         throw new InvalidOperationException("Expected failure");
+    }
+
+    /// <summary>Supplies an observable argument for the filtered-level serialization check.</summary>
+    [LogThis]
+    public string UseProbe(SerializationProbe probe) => "ok";
+
+    /// <summary>Preserves a nested collection while its logged representation is masked.</summary>
+    [LogThis]
+    public List<Credential> Echo(List<Credential> credentials) => credentials;
+}
+
+/// <summary>Fixture with a sensitive field and a nested list.</summary>
+internal sealed record Credential(string Password, string Visible, List<Credential> Children);
+
+/// <summary>Counts reads of a property that JSON serialization would access.</summary>
+internal sealed class SerializationProbe
+{
+    public int ReadCount { get; private set; }
+
+    public string Value
+    {
+        get
+        {
+            ReadCount++;
+            return "observed";
+        }
     }
 }
 
@@ -142,6 +237,34 @@ internal sealed class CaptureProvider(List<string> messages) : ILoggerProvider
         /// <summary>Shared no-op scope instance.</summary>
         public static readonly NullScope Instance = new();
         /// <summary>Does nothing because the capture logger maintains no scope state.</summary>
+        public void Dispose() { }
+    }
+}
+
+/// <summary>Provider fixture that fails on every log call to exercise console-only diagnostics.</summary>
+internal sealed class ThrowingProvider : ILoggerProvider
+{
+    /// <summary>Creates a logger that throws when asked to emit an event.</summary>
+    public ILogger CreateLogger(string categoryName) => new ThrowingLogger();
+
+    /// <summary>Owns no resources.</summary>
+    public void Dispose() { }
+
+    private sealed class ThrowingLogger : ILogger
+    {
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            throw new InvalidOperationException("Configured provider failed");
+        }
+    }
+
+    private sealed class NullScope : IDisposable
+    {
+        public static readonly NullScope Instance = new();
         public void Dispose() { }
     }
 }

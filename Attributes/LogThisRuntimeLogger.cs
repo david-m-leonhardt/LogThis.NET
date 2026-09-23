@@ -12,7 +12,7 @@ public static class LogThisRuntimeLogger
 {
     #region Private Methods
 
-    /// <summary>Builds and emits one enabled access-point event.</summary>
+    /// <summary>Builds and emits one access-point event when its log level is enabled.</summary>
     /// <param name="runtime">Logger and configuration for the active scope.</param>
     /// <param name="accessPoint">Settings for the event being emitted.</param>
     /// <param name="context">Method metadata and arguments for this invocation.</param>
@@ -27,11 +27,12 @@ public static class LogThisRuntimeLogger
         object? returnValue,
         Exception? exception)
     {
-        if (!accessPoint.LogAccessPoint) return;
-
         try
         {
-            // Catch construction and provider failures; diagnostic logging below is a separate best-effort call.
+            // Catch construction and provider failures without changing the intercepted method's outcome.
+            // Check the level before serializing arguments or the return value.
+            if (!accessPoint.LogAccessPoint || !runtime.Logger.IsEnabled(accessPoint.LogLevel)) return;
+
             ILogThisConfiguration configuration = runtime.Configuration;
             LogParameters parameters = new(configuration.MessageDelimeter);
 
@@ -76,7 +77,18 @@ public static class LogThisRuntimeLogger
         {
             if (runtime.Configuration.DebugLogThis)
             {
-                runtime.Logger.LogDebug(loggingException, "LogThis failed while constructing a log message.");
+                // This logger is independent of the application's configured provider and writes only to the console.
+                try
+                {
+                    using ILoggerFactory consoleFactory = LoggerFactory.Create(builder =>
+                        builder.SetMinimumLevel(LogLevel.Debug).AddConsole());
+                    ILogger consoleLogger = consoleFactory.CreateLogger("LogThis.Diagnostics");
+                    consoleLogger.LogDebug(loggingException, "LogThis failed while emitting a method log.");
+                }
+                catch
+                {
+                    // Diagnostics must never replace the intercepted method's result or exception.
+                }
             }
         }
     }

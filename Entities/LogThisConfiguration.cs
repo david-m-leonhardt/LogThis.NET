@@ -9,11 +9,11 @@ namespace LogThis.Entities
     {
         #region Public Properties
 
-        /// <summary>Logs internal message-construction failures at Debug level.</summary>
+        /// <summary>Writes internal logging failures to the console at Debug level, independent of configured providers.</summary>
         /// <value><see langword="false"/> by default.</value>
         public bool DebugLogThis { get; set; } = false;
 
-        /// <summary>JSON property names to redact from logged values.</summary>
+        /// <summary>Case-insensitive JSON property names to redact at any depth in logged values.</summary>
         /// <value>An initially empty, mutable list.</value>
         public List<string> JsonFieldsToMask { get; set; } = [];
 
