@@ -13,12 +13,6 @@ namespace LogThis.Attributes
     {
         #region Private Properties
 
-        private static List<IMessageComponentBuilder> componentBuilders;
-
-        private static ILogThisConfiguration? config;
-
-        private static ILogger? logger;
-
         private static JsonSerializerSettings SerializerSettings => new()
         {
             NullValueHandling = NullValueHandling.Ignore,
@@ -29,11 +23,11 @@ namespace LogThis.Attributes
 
         #region Private Methods
 
-        private static LogParameters BuildLogParameters(IAccessPointConfiguration accessPointConfig, MethodExecutionArgs arg)
+        private static LogParameters BuildLogParameters(LogThisRuntime runtime, IAccessPointConfiguration accessPointConfig, MethodExecutionArgs arg)
         {
-            LogParameters logParameters = new(config.MessageDelimeter);
+            LogParameters logParameters = new(runtime.Configuration.MessageDelimeter);
 
-            foreach (IMessageComponentBuilder builder in componentBuilders)
+            foreach (IMessageComponentBuilder builder in runtime.ComponentBuilders)
             {
                 if (builder.IncludeThisBuilder(accessPointConfig))
                 {
@@ -42,34 +36,33 @@ namespace LogThis.Attributes
                 }
             }
 
-            logParameters.AddMessageComponents(config.MessageComponents);
+            logParameters.AddMessageComponents(runtime.Configuration.MessageComponents);
 
             return logParameters;
         }
 
-        private static void LogMessage(IAccessPointConfiguration accessPointConfig, MethodExecutionArgs arg)
+        private static void LogMessage(LogThisRuntime runtime, IAccessPointConfiguration accessPointConfig, MethodExecutionArgs arg)
         {
-            ArgumentNullException.ThrowIfNull(logger);
-            ArgumentNullException.ThrowIfNull(config);
+            if (!accessPointConfig.LogAccessPoint) return;
 
             try
             {
-                LogParameters logParameters = BuildLogParameters(accessPointConfig, arg);
+                LogParameters logParameters = BuildLogParameters(runtime, accessPointConfig, arg);
 
-                if (accessPointConfig is OnExceptionConfiguration)
+                if (ReferenceEquals(accessPointConfig, runtime.Configuration.OnExceptionConfig))
                 {
-                    logger?.Log(accessPointConfig.LogLevel, arg.Exception, logParameters.Message, logParameters.Args);
+                    runtime.Logger.Log(accessPointConfig.LogLevel, arg.Exception, logParameters.Message, logParameters.Args);
                 }
                 else
                 {
-                    logger?.Log(accessPointConfig.LogLevel, logParameters.Message, logParameters.Args);
+                    runtime.Logger.Log(accessPointConfig.LogLevel, logParameters.Message, logParameters.Args);
                 }
             }
             catch (Exception e)
             {
-                if (config.DebugLogThis)
+                if (runtime.Configuration.DebugLogThis)
                 {
-                    logger?.LogDebug(e, e.Message, e.StackTrace);
+                    runtime.Logger.LogDebug(e, "LogThis failed while constructing a log message.");
                 }
             }
         }
@@ -80,8 +73,10 @@ namespace LogThis.Attributes
 
             if (jsonContent.IsValidJson())
             {
-                string[] blackList = [.. config.JsonFieldsToMask];
-                string mask = config.JsonMaskValue;
+                LogThisRuntime runtime = LogThisRuntimeContext.Current
+                    ?? throw new InvalidOperationException("No LogThis scope is active.");
+                string[] blackList = [.. runtime.Configuration.JsonFieldsToMask];
+                string mask = runtime.Configuration.JsonMaskValue;
 
                 string maskedJsonContent = jsonContent.MaskFields(blackList, mask).Replace("\r\n", "");
                 while (maskedJsonContent.Contains("  "))
@@ -98,16 +93,6 @@ namespace LogThis.Attributes
         #endregion
 
         #region Public Methods  
-
-        public static void Initialize(ILogger? logger, ILogThisConfiguration? logThisConfiguration)
-        {
-            ArgumentNullException.ThrowIfNull(logger);
-            ArgumentNullException.ThrowIfNull(logThisConfiguration);
-
-            LogThisAttribute.logger = logger;
-            config = logThisConfiguration;
-            componentBuilders = config.GetComponentBuilders();
-        }
 
         public static string MaskObject(object obj)
         {
@@ -142,20 +127,22 @@ namespace LogThis.Attributes
 
         public override void OnEntry(MethodExecutionArgs arg)
         {
-            LogMessage(config.OnEntryConfig, arg);
+            LogThisRuntime? runtime = LogThisRuntimeContext.Current;
+            if (runtime != null) LogMessage(runtime, runtime.Configuration.OnEntryConfig, arg);
         }
 
         public override void OnException(MethodExecutionArgs arg)
         {
-            LogMessage(config.OnExceptionConfig, arg);
+            LogThisRuntime? runtime = LogThisRuntimeContext.Current;
+            if (runtime != null) LogMessage(runtime, runtime.Configuration.OnExceptionConfig, arg);
         }
 
         public override void OnExit(MethodExecutionArgs arg)
         {
-            LogMessage(config.OnExitConfig, arg);
+            LogThisRuntime? runtime = LogThisRuntimeContext.Current;
+            if (runtime != null) LogMessage(runtime, runtime.Configuration.OnExitConfig, arg);
         }
 
         #endregion
     }
 }
-  

@@ -8,12 +8,12 @@ method-boundary logging with attributes. It uses the standard
 > [!IMPORTANT]
 > This project is under active development. The API may change, documentation
 > may lag behind the implementation, and some features are incomplete. The
-> current initialization extensions target ASP.NET Core applications.
+> ASP.NET Core requests are scoped automatically. Console applications and
+> background services establish an explicit logging scope.
 
 ## Current requirements
 
 - .NET 10 SDK
-- An ASP.NET Core application for the currently supported initialization flow
 - `MethodBoundaryAspect.Fody` configured in the consuming project
 
 The repository currently builds the library from source; package-distribution
@@ -56,6 +56,31 @@ app.MapControllers();
 
 app.Run();
 ```
+
+`UseLogThis` adds middleware that establishes a separate logging scope for each
+request. Place it before endpoints that call methods marked with `[LogThis]`.
+
+For console applications and background services, register LogThis with
+`AddLogThisConfiguration()`, then resolve `ILogThisScopeFactory` from the service
+provider. Keep its scope active while calling marked methods:
+
+```csharp
+using LogThis.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
+
+ILogThisScopeFactory scopeFactory =
+    serviceProvider.GetRequiredService<ILogThisScopeFactory>();
+
+using (scopeFactory.BeginScope("MyApplication.Worker"))
+{
+    await RunApplicationAsync();
+}
+```
+
+The scope flows across `await`. A background service can inject the factory and
+open a scope in `ExecuteAsync`. The same operation is available as
+`serviceProvider.UseLogThis()` after importing `LogThis.Middleware`. Marked
+methods called without an active scope produce no LogThis logs.
 
 Apply `[LogThis]` to a class or method to log entry, exit, and unhandled
 exceptions. A class-level attribute applies to its methods:
@@ -191,8 +216,7 @@ dotnet build LogThis.NET.csproj
 ```
 
 The `LogThis.ApiTester` and `LogThis.consoleTester` projects are development
-harnesses in sibling directories rather than supported packages. The console
-harness does not yet use the current ASP.NET Core initialization flow.
+harnesses in sibling directories rather than supported packages.
 
 ## License
 

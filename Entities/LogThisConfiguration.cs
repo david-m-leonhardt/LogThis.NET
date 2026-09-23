@@ -6,17 +6,6 @@ namespace LogThis.Entities
 {
     public sealed class LogThisConfiguration() : ILogThisConfiguration
     {
-        List<(bool, IMessageComponentBuilder)> ComponentBuilders =>
-        [
-            (OnEntryConfig.LogAccessPoint, OnEntryConfig as IMessageComponentBuilder),
-            (OnExceptionConfig.LogAccessPoint, OnExceptionConfig as IMessageComponentBuilder),
-            (OnExitConfig.LogAccessPoint, OnExitConfig as IMessageComponentBuilder),
-            (LogClassName, new ClassComponentBuilder()),
-            (LogMethodName, new MethodComponentBuilder()),
-            (LogMethodArguments, new ArgumentComponentBuilder()),
-            (LogMethodReturnValue, new ReturnValueComponentBuilder())
-        ];
-
         #region Public Properties
 
         public bool DebugLogThis { get; set; } = false;
@@ -59,15 +48,35 @@ namespace LogThis.Entities
         {
             List<IMessageComponentBuilder> componentBuilders = [];
 
-            ComponentBuilders.ForEach(builder =>
+            AddAccessPointBuilder(OnEntryConfig);
+            AddAccessPointBuilder(OnExceptionConfig);
+            AddAccessPointBuilder(OnExitConfig);
+
+            List<(bool Enabled, IMessageComponentBuilder Builder)> optionalBuilders =
+            [
+                (LogClassName, new ClassComponentBuilder()),
+                (LogMethodName, new MethodComponentBuilder()),
+                (LogMethodArguments, new ArgumentComponentBuilder()),
+                (LogMethodReturnValue, new ReturnValueComponentBuilder())
+            ];
+
+            foreach ((bool enabled, IMessageComponentBuilder builder) in optionalBuilders)
             {
-                if (builder.Item1)
+                if (enabled)
                 {
-                    componentBuilders.Add(builder.Item2);
+                    componentBuilders.Add(builder);
                 }
-            });
+            }
 
             return componentBuilders;
+
+            void AddAccessPointBuilder(IAccessPointConfiguration accessPoint)
+            {
+                if (accessPoint.LogAccessPoint && accessPoint is IMessageComponentBuilder builder)
+                {
+                    componentBuilders.Add(builder);
+                }
+            }
         }
 
         #endregion

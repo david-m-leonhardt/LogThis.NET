@@ -15,7 +15,7 @@ namespace LogThis.Entities
 
         public override object BuildArg(MethodExecutionArgs arg)
         {
-            return arg.Method.DeclaringType.Name;
+            return arg.Method.DeclaringType?.Name ?? string.Empty;
         }
 
         #endregion

@@ -22,11 +22,12 @@ namespace LogThis.Middleware
             public void AddLogThisConfiguration(ILogThisConfiguration logThisConfiguration)
             {
                 services.AddSingleton(logThisConfiguration);
+                services.AddSingleton<ILogThisScopeFactory, LogThisScopeFactory>();
             }
 
             public void AddLogThisConfiguration(
                 bool DebugLogThis = false,
-                List<string> JsonFieldsToMask = null,
+                List<string>? JsonFieldsToMask = null,
                 string JsonMaskValue = MessageComponentConstants.DefaultJsonMaskValue,
                 bool LogClassName = false,
                 bool LogMethodArguments = false,
@@ -35,7 +36,7 @@ namespace LogThis.Middleware
                 bool LogOnEntry = true,
                 bool LogOnException = true,
                 bool LogOnExit = true,
-                Dictionary<string, object> MessageComponents = null,
+                Dictionary<string, object>? MessageComponents = null,
                 string MessageDelimeter = MessageComponentConstants.DefaultDelimeter,
                 LogLevel OnEntryLogLevel = LogLevel.Information,
                 string OnEntryMessage = AccessPointConstants.EnteredMessage,
@@ -75,7 +76,7 @@ namespace LogThis.Middleware
                     }
                 };
 
-                logThisConfiguration.AddMessageComponents(MessageComponents);
+                logThisConfiguration.AddMessageComponents(MessageComponents ?? []);
 
                 AddLogThisConfiguration(services, logThisConfiguration);
             }
@@ -90,12 +91,20 @@ namespace LogThis.Middleware
 
             public void UseLogThis(string categoryName)
             {
-                ILoggerFactory? loggerFactory = app.Services.GetService<ILoggerFactory>();
-                ILogger? logger = loggerFactory?.CreateLogger(categoryName);
+                ILogThisScopeFactory scopeFactory = app.Services.GetRequiredService<ILogThisScopeFactory>();
+                app.Use(async (_, next) =>
+                {
+                    using IDisposable scope = scopeFactory.BeginScope(categoryName);
+                    await next();
+                });
+            }
+        }
 
-                ILogThisConfiguration? loggerConfiguration = app.Services.GetService<ILogThisConfiguration>();
-
-                LogThisAttribute.Initialize(logger, loggerConfiguration);
+        extension(IServiceProvider serviceProvider)
+        {
+            public IDisposable UseLogThis(string categoryName = MessageComponentConstants.DefaultCategoryName)
+            {
+                return serviceProvider.GetRequiredService<ILogThisScopeFactory>().BeginScope(categoryName);
             }
         }
 
