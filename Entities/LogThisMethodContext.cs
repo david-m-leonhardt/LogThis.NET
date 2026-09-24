@@ -1,4 +1,4 @@
-namespace LogThis.Attributes;
+namespace LogThis.Entities;
 
 /// <summary>Captures the method metadata and argument values used by one LogThis invocation.</summary>
 /// <remarks>
@@ -12,17 +12,17 @@ public sealed class LogThisMethodContext(string methodName, string className, ob
 {
     #region Public Properties
 
-    /// <summary>Gets the intercepted method's name.</summary>
-    /// <value>The name provided by <c>meta.Target.Method.Name</c>.</value>
-    public string MethodName { get; } = methodName;
+    /// <summary>Gets the values of the method arguments for this call.</summary>
+    /// <value>The array generated from <c>meta.Target.Parameters.ToValueArray()</c> for this invocation.</value>
+    public object?[] Arguments { get; } = arguments;
 
     /// <summary>Gets the declaring class's name.</summary>
     /// <value>The name provided by <c>meta.Target.Method.DeclaringType.Name</c>.</value>
     public string ClassName { get; } = className;
 
-    /// <summary>Gets the values of the method arguments for this call.</summary>
-    /// <value>The array generated from <c>meta.Target.Parameters.ToValueArray()</c> for this invocation.</value>
-    public object?[] Arguments { get; } = arguments;
+    /// <summary>Gets the intercepted method's name.</summary>
+    /// <value>The name provided by <c>meta.Target.Method.Name</c>.</value>
+    public string MethodName { get; } = methodName;
 
     #endregion
 }

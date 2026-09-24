@@ -1,8 +1,7 @@
-using LogThis.Entities;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace LogThis.Attributes;
+namespace LogThis.Entities;
 
 /// <summary>Serializes logged values and masks configured property names throughout the JSON tree.</summary>
 internal static class LogThisValueMasker

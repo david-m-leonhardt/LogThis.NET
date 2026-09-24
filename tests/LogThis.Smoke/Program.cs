@@ -52,6 +52,29 @@ Require(firstHostLogs.Any(log => log.Contains("Exception", StringComparison.Ordi
 Require(firstHostLogs.Any(log => log.Contains("GetAsync", StringComparison.Ordinal)), "Class-level method was not logged.");
 Require(secondHostLogs.All(log => log.Contains("second", StringComparison.Ordinal)), "Host logs were mixed.");
 
+// An exception has no return value; a successful null result does.
+List<string> returnValueLogs = [];
+using (ServiceProvider returnValueHost = CreateHost(returnValueLogs))
+using (returnValueHost.GetRequiredService<ILogThisScopeFactory>().BeginScope("ReturnValues"))
+{
+    Require(methods.ReturnNull() == null, "A null result changed.");
+    try
+    {
+        await methods.FailAsync();
+        throw new Exception("Expected method failure for the return-value check.");
+    }
+    catch (InvalidOperationException)
+    {
+    }
+}
+
+Require(returnValueLogs.Count == 4, "Expected entry and exit/exception return-value events.");
+Require(returnValueLogs.Any(log => log.Contains("ReturnValue: null", StringComparison.Ordinal)),
+    "A successful null result was not logged as null.");
+Require(returnValueLogs.Any(log => log.Contains("Exception", StringComparison.Ordinal)
+    && log.EndsWith("ReturnValue: ", StringComparison.Ordinal)),
+    "An exception event did not leave the return value blank.");
+
 // Property-name masking must cover argument and return-value arrays at every depth.
 List<string> maskingLogs = [];
 ServiceCollection maskingServices = new();
@@ -144,6 +167,10 @@ internal sealed class TestMethods
     /// <summary>Checks preservation of a synchronous return value.</summary>
     [LogThis]
     public string Succeed(string value) => value;
+
+    /// <summary>Checks that a successful null result remains distinct from an exception.</summary>
+    [LogThis]
+    public string? ReturnNull() => null;
 
     /// <summary>Checks logging after an asynchronous completion.</summary>
     [LogThis]

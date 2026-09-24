@@ -1,3 +1,4 @@
+using LogThis.Entities;
 using Metalama.Framework.Advising;
 using Metalama.Framework.Aspects;
 using Metalama.Framework.Code;
@@ -43,30 +44,6 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
         }
     }
 
-    /// <summary>Wraps a synchronous method with entry, exit, and exception events.</summary>
-    /// <returns>The original method's result, if any.</returns>
-    public override dynamic? OverrideMethod()
-    {
-        LogThisMethodContext context = new(
-            meta.Target.Method.Name,
-            meta.Target.Method.DeclaringType.Name,
-            meta.Target.Parameters.ToValueArray());
-
-        LogThisRuntimeLogger.Entry(context);
-
-        try
-        {
-            dynamic? result = meta.Proceed();
-            LogThisRuntimeLogger.Exit(context, result);
-            return result;
-        }
-        catch (Exception exception)
-        {
-            LogThisRuntimeLogger.Exception(context, exception);
-            throw;
-        }
-    }
-
     /// <summary>Wraps an awaitable method and logs its completed result or failure.</summary>
     /// <returns>The original method's result after it completes, if any.</returns>
     public override async Task<dynamic?> OverrideAsyncMethod()
@@ -76,18 +53,42 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
             meta.Target.Method.DeclaringType.Name,
             meta.Target.Parameters.ToValueArray());
 
-        LogThisRuntimeLogger.Entry(context);
+        global::LogThis.Entities.LogThisRuntimeLogger.Entry(context);
 
         try
         {
             // Await so exit and exception events reflect the eventual outcome.
             dynamic? result = await meta.ProceedAsync();
-            LogThisRuntimeLogger.Exit(context, result);
+            global::LogThis.Entities.LogThisRuntimeLogger.Exit(context, result);
             return result;
         }
         catch (Exception exception)
         {
-            LogThisRuntimeLogger.Exception(context, exception);
+            global::LogThis.Entities.LogThisRuntimeLogger.Exception(context, exception);
+            throw;
+        }
+    }
+
+    /// <summary>Wraps a synchronous method with entry, exit, and exception events.</summary>
+    /// <returns>The original method's result, if any.</returns>
+    public override dynamic? OverrideMethod()
+    {
+        LogThisMethodContext context = new(
+            meta.Target.Method.Name,
+            meta.Target.Method.DeclaringType.Name,
+            meta.Target.Parameters.ToValueArray());
+
+        global::LogThis.Entities.LogThisRuntimeLogger.Entry(context);
+
+        try
+        {
+            dynamic? result = meta.Proceed();
+            global::LogThis.Entities.LogThisRuntimeLogger.Exit(context, result);
+            return result;
+        }
+        catch (Exception exception)
+        {
+            global::LogThis.Entities.LogThisRuntimeLogger.Exception(context, exception);
             throw;
         }
     }

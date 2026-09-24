@@ -1,9 +1,8 @@
 using LogThis.Constants;
-using LogThis.Entities;
 using LogThis.Interfaces;
 using Microsoft.Extensions.Logging;
 
-namespace LogThis.Attributes;
+namespace LogThis.Entities;
 
 /// <summary>
 /// Runtime entry points for generated aspect code. An absent ambient scope suppresses logging.
@@ -67,7 +66,9 @@ public static class LogThisRuntimeLogger
                 exception != null && configuration.LogMethodReturnValue)
             {
                 parameters.AddMessage(MessageComponentConstants.ReturnValueLabel);
-                parameters.AddArgs($"ReturnValue: {LogThisValueMasker.MaskObject(returnValue!)}");
+                parameters.AddArgs(exception != null
+                    ? "ReturnValue: "
+                    : $"ReturnValue: {LogThisValueMasker.MaskObject(returnValue)}");
             }
 
             parameters.AddMessageComponents(configuration.MessageComponents);
@@ -108,18 +109,6 @@ public static class LogThisRuntimeLogger
         }
     }
 
-    /// <summary>Emits a successful method-exit event when a scope is active.</summary>
-    /// <param name="context">Method metadata and arguments for this invocation.</param>
-    /// <param name="returnValue">Result produced by the method, if any.</param>
-    public static void Exit(LogThisMethodContext context, object? returnValue)
-    {
-        LogThisRuntime? runtime = LogThisRuntimeContext.Current;
-        if (runtime != null)
-        {
-            Write(runtime, runtime.Configuration.OnExitConfig, context, null, returnValue, null);
-        }
-    }
-
     /// <summary>Emits an exception event when a scope is active.</summary>
     /// <remarks>If return-value logging is enabled, the exception event currently has an empty return-value component.</remarks>
     /// <param name="context">Method metadata and arguments for this invocation.</param>
@@ -130,6 +119,18 @@ public static class LogThisRuntimeLogger
         if (runtime != null)
         {
             Write(runtime, runtime.Configuration.OnExceptionConfig, context, context.Arguments, null, exception);
+        }
+    }
+
+    /// <summary>Emits a successful method-exit event when a scope is active.</summary>
+    /// <param name="context">Method metadata and arguments for this invocation.</param>
+    /// <param name="returnValue">Result produced by the method, if any.</param>
+    public static void Exit(LogThisMethodContext context, object? returnValue)
+    {
+        LogThisRuntime? runtime = LogThisRuntimeContext.Current;
+        if (runtime != null)
+        {
+            Write(runtime, runtime.Configuration.OnExitConfig, context, null, returnValue, null);
         }
     }
 
