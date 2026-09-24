@@ -49,9 +49,29 @@ app.Run();
 `UseLogThis` adds middleware that establishes a separate logging scope for each
 request. Place it before endpoints that call methods marked with `[LogThis]`.
 
-For console applications and background services, register LogThis with
-`AddLogThisConfiguration()`, then resolve `ILogThisScopeFactory` from the service
-provider. Keep its scope active while calling marked methods:
+For console applications and background services, register an `IConfiguration`
+and call `services.AddLogThisConfiguration()`. LogThis reads the `LogThis` section
+by name when its configuration is first resolved. A plain console application
+can load `appsettings.json` like this (with the
+`Microsoft.Extensions.Configuration.Json` package and the file copied to output):
+
+```csharp
+using LogThis.Middleware;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+IConfiguration configuration = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: false)
+    .Build();
+
+ServiceCollection services = new();
+services.AddSingleton(configuration);
+services.AddLogThisConfiguration();
+```
+
+Then resolve `ILogThisScopeFactory` from the service provider. Keep its scope
+active while calling marked methods:
 
 ```csharp
 using LogThis.Interfaces;
@@ -104,35 +124,74 @@ components are registered by default.
 
 ### Custom configuration
 
-Pass configuration values when registering the service:
+Use a callback to override defaults in code. When a `LogThis` section is also
+available, its values are bound first and the callback takes precedence:
 
 ```csharp
 using LogThis.Middleware;
 using Microsoft.Extensions.Logging;
 
 builder.Services.AddLogThisConfiguration(
-    DebugLogThis: true,
-    JsonFieldsToMask: ["Password", "AuthToken"],
-    JsonMaskValue: "[REDACTED]",
-    LogClassName: true,
-    LogMethodArguments: true,
-    LogMethodName: true,
-    LogMethodReturnValue: true,
-    LogOnEntry: true,
-    LogOnException: true,
-    LogOnExit: true,
-    MessageComponents: new Dictionary<string, object>
+    options =>
     {
-        ["Application"] = "Ordering"
-    },
-    MessageDelimeter: " | ",
-    OnEntryLogLevel: LogLevel.Debug,
-    OnEntryMessage: "Starting",
-    OnExceptionLogLevel: LogLevel.Error,
-    OnExceptionMessage: "Failed",
-    OnExitLogLevel: LogLevel.Debug,
-    OnExitMessage: "Finished");
+        options.DebugLogThis = true;
+        options.JsonFieldsToMask = ["Password", "AuthToken"];
+        options.JsonMaskValue = "[REDACTED]";
+        options.LogClassName = true;
+        options.LogMethodArguments = true;
+        options.LogMethodReturnValue = true;
+        options.OnEntryConfig.LogLevel = LogLevel.Debug;
+        options.OnEntryConfig.AccessPointMessage = "Starting";
+        options.OnExceptionConfig.AccessPointMessage = "Failed";
+        options.OnExitConfig.LogLevel = LogLevel.Debug;
+        options.OnExitConfig.AccessPointMessage = "Finished";
+        options.AddMessageComponents(new Dictionary<string, object>
+        {
+            ["Application"] = "Ordering"
+        });
+    });
 ```
+
+Alternatively, bind a `LogThis` section from the application's configuration:
+
+```json
+{
+  "LogThis": {
+    "JsonFieldsToMask": ["Password", "AuthToken"],
+    "JsonMaskValue": "[REDACTED]",
+    "LogMethodArguments": true,
+    "LogMethodReturnValue": true,
+    "MessageComponents": {
+      "Application": "Ordering"
+    },
+    "OnEntryConfig": {
+      "LogLevel": "Debug",
+      "AccessPointMessage": "Starting"
+    },
+    "OnExceptionConfig": {
+      "LogLevel": "Error"
+    }
+  }
+}
+```
+
+```csharp
+builder.Services.AddLogThisConfiguration(); // ASP.NET Core
+// or: services.AddLogThisConfiguration(); // IConfiguration registered in DI
+```
+
+This works with ASP.NET Core's `WebApplicationBuilder` and with a generic host
+for a console application or background service. A plain `ServiceCollection`
+caller can register an `IConfiguration` as shown above. The
+section uses the property names of `LogThisConfiguration`; event settings live
+under `OnEntryConfig`, `OnExceptionConfig`, and `OnExitConfig`. Omitted values keep their
+defaults, and bound `MessageComponents` keys are normalized into logging
+placeholders. Unknown keys inside a present `LogThis` section cause an error when
+the LogThis configuration is first resolved. If `IConfiguration` is not
+registered or the whole `LogThis` section is absent, LogThis uses its defaults;
+therefore a misspelled section name cannot be distinguished from an intentionally
+absent section. Configuration is read once when first resolved; file reloads do
+not update an active LogThis service provider.
 
 The component switches control the structured properties added to a message:
 
@@ -142,8 +201,8 @@ The component switches control the structured properties added to a message:
 - `LogMethodReturnValue` adds `{ReturnValue}` to exit logs. It also adds an
   empty return-value component to exception logs; a failed method has no result.
 - `MessageComponents` adds application-specific properties to every log.
-- `LogOnEntry`, `LogOnException`, and `LogOnExit` independently enable each
-  method access point.
+- `OnEntryConfig.LogAccessPoint`, `OnExceptionConfig.LogAccessPoint`, and
+  `OnExitConfig.LogAccessPoint` independently enable each method access point.
 
 LogThis checks the configured provider's level for each access point before
 formatting the message or serializing its arguments or return value. The aspect
@@ -198,11 +257,13 @@ they are logged. Every property whose name matches `JsonFieldsToMask`
 
 ```csharp
 builder.Services.AddLogThisConfiguration(
-    JsonFieldsToMask: ["Password", "AuthToken"],
-    JsonMaskValue: "*****",
-    LogMethodArguments: true,
-    LogMethodReturnValue: true,
-    MessageComponents: new Dictionary<string, object>());
+    options =>
+    {
+        options.JsonFieldsToMask = ["Password", "AuthToken"];
+        options.JsonMaskValue = "*****";
+        options.LogMethodArguments = true;
+        options.LogMethodReturnValue = true;
+    });
 ```
 
 Arguments are serialized one value at a time. Objects inside arrays, including
@@ -221,13 +282,10 @@ From the repository root, restore and build the library with:
 ```powershell
 dotnet restore LogThis.NET.csproj
 dotnet build LogThis.NET.csproj
-dotnet run --project tests/LogThis.Smoke/LogThis.Smoke.csproj -c Release
 ```
 
 The build emits `LogThis.NET.xml` alongside the library DLL for API-documentation
-tools. The smoke project checks method-level and class-level interception,
-sync and async outcomes, exceptions, nested runtime scopes, filtered log levels,
-and failure of an application logging provider.
+tools.
 
 The `LogThis.ApiTester` and `LogThis.consoleTester` projects are development
 harnesses in sibling directories rather than supported packages.

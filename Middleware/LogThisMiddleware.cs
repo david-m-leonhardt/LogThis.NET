@@ -2,107 +2,60 @@
 using LogThis.Entities;
 using LogThis.Interfaces;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace LogThis.Middleware
 {
     /// <summary>Registers LogThis options and opens runtime scopes for HTTP or manual callers.</summary>
     public static class LogThisMiddleware
     {
+        #region Private Properties
+
+        private const string sectionKey = "LogThis";
+
+        #endregion
+
         #region Public Methods
 
-        // These service extensions offer default, prebuilt, and parameter-based configuration.
+        // Service registration is shared by web, console, and background hosts.
         extension(IServiceCollection services)
         {
-            /// <summary>Registers LogThis with default configuration.</summary>
-            public void AddLogThisConfiguration()
+            /// <summary>Registers LogThis using defaults, optional DI-provided settings, and optional code overrides.</summary>
+            /// <remarks>Register <see cref="IConfiguration"/> before building the service provider to bind its <c>LogThis</c> section. The callback runs after binding when the configuration is first resolved. Unknown keys in a present section cause an error.</remarks>
+            /// <param name="configure">Optional changes to make after configuration binding.</param>
+            public void AddLogThisConfiguration(Action<LogThisConfiguration>? configure = null)
             {
-                AddLogThisConfiguration(services, new LogThisConfiguration());
+                RegisterConfiguration(services, provider =>
+                {
+                    IConfiguration? appConfiguration = provider.GetService<IConfiguration>();
+                    LogThisConfiguration options = appConfiguration == null
+                        ? new LogThisConfiguration()
+                        : BindConfiguration(appConfiguration.GetSection(sectionKey));
+                    configure?.Invoke(options);
+                    return options;
+                });
+            }
+
+            /// <summary>Registers LogThis using values bound once from an application configuration section.</summary>
+            /// <remarks>Omitted values retain their defaults, but unknown keys cause an error. Configuration reloads do not update the registered singleton.</remarks>
+            /// <param name="section">Section containing LogThis option names and values.</param>
+            /// <exception cref="ArgumentNullException"><paramref name="section"/> is <see langword="null"/>.</exception>
+            /// <exception cref="ArgumentException">Custom message component names become duplicates after normalization.</exception>
+            public void AddLogThisConfiguration(IConfigurationSection section)
+            {
+                ArgumentNullException.ThrowIfNull(section);
+
+                AddLogThisConfiguration(services, BindConfiguration(section));
             }
 
             /// <summary>Registers one configuration and the scope factory for dependency injection.</summary>
             /// <param name="logThisConfiguration">Configuration instance shared by all registered scopes.</param>
             public void AddLogThisConfiguration(ILogThisConfiguration logThisConfiguration)
             {
-                services.AddSingleton(logThisConfiguration);
-                services.AddSingleton<ILogThisScopeFactory, LogThisScopeFactory>();
-            }
+                ArgumentNullException.ThrowIfNull(logThisConfiguration);
 
-            /// <summary>Registers LogThis using individual options and event-specific settings.</summary>
-            /// <param name="DebugLogThis">Write internal logging failures to the console at Debug level, independently of configured providers.</param>
-            /// <param name="JsonFieldsToMask">Case-insensitive JSON property names to redact at any depth in logged values.</param>
-            /// <param name="JsonMaskValue">Replacement text for redacted JSON fields.</param>
-            /// <param name="LogClassName">Include the declaring class name in events.</param>
-            /// <param name="LogMethodArguments">Include serialized arguments on entry and exception events.</param>
-            /// <param name="LogMethodName">Include the method name in events.</param>
-            /// <param name="LogMethodReturnValue">Include the serialized result on exit and an empty return-value component on exception events.</param>
-            /// <param name="LogOnEntry">Enable method-entry events.</param>
-            /// <param name="LogOnException">Enable exception events.</param>
-            /// <param name="LogOnExit">Enable successful-exit events.</param>
-            /// <param name="MessageComponents">Additional structured properties for every event.</param>
-            /// <param name="MessageDelimeter">Separator between message-template components.</param>
-            /// <param name="OnEntryLogLevel">Severity of entry events.</param>
-            /// <param name="OnEntryMessage">Text emitted for entry events.</param>
-            /// <param name="OnExceptionLogLevel">Severity of exception events.</param>
-            /// <param name="OnExceptionMessage">Text emitted for exception events.</param>
-            /// <param name="OnExitLogLevel">Severity of exit events.</param>
-            /// <param name="OnExitMessage">Text emitted for exit events.</param>
-            /// <exception cref="ArgumentException">A normalized custom component name is duplicated.</exception>
-            public void AddLogThisConfiguration(
-                bool DebugLogThis = false,
-                List<string>? JsonFieldsToMask = null,
-                string JsonMaskValue = MessageComponentConstants.DefaultJsonMaskValue,
-                bool LogClassName = false,
-                bool LogMethodArguments = false,
-                bool LogMethodName = true,
-                bool LogMethodReturnValue = false,
-                bool LogOnEntry = true,
-                bool LogOnException = true,
-                bool LogOnExit = true,
-                Dictionary<string, object>? MessageComponents = null,
-                string MessageDelimeter = MessageComponentConstants.DefaultDelimeter,
-                LogLevel OnEntryLogLevel = LogLevel.Information,
-                string OnEntryMessage = AccessPointConstants.EnteredMessage,
-                LogLevel OnExceptionLogLevel = LogLevel.Error,
-                string OnExceptionMessage = AccessPointConstants.ExceptionMessage,
-                LogLevel OnExitLogLevel = LogLevel.Information,
-                string OnExitMessage = AccessPointConstants.ExitMessage
-                )
-            {
-                LogThisConfiguration logThisConfiguration = new()
-                {
-                    DebugLogThis = DebugLogThis,
-                    JsonFieldsToMask = JsonFieldsToMask ?? [],
-                    JsonMaskValue = JsonMaskValue,
-                    LogClassName = LogClassName,
-                    LogMethodArguments = LogMethodArguments,
-                    LogMethodName = LogMethodName,
-                    LogMethodReturnValue = LogMethodReturnValue,
-                    MessageDelimeter = MessageDelimeter,
-                    OnEntryConfig = new OnEntryConfiguration
-                    {
-                        AccessPointMessage = OnEntryMessage,
-                        LogAccessPoint = LogOnEntry,
-                        LogLevel = OnEntryLogLevel
-                    },
-                    OnExceptionConfig = new OnExceptionConfiguration
-                    {
-                        AccessPointMessage = OnExceptionMessage,
-                        LogAccessPoint = LogOnException,
-                        LogLevel = OnExceptionLogLevel
-                    },
-                    OnExitConfig = new OnExitConfiguration
-                    {
-                        AccessPointMessage = OnExitMessage,
-                        LogAccessPoint = LogOnExit,
-                        LogLevel = OnExitLogLevel
-                    }
-                };
-
-                logThisConfiguration.AddMessageComponents(MessageComponents ?? []);
-
-                AddLogThisConfiguration(services, logThisConfiguration);
+                RegisterConfiguration(services, _ => logThisConfiguration);
             }
         }
 
@@ -142,6 +95,34 @@ namespace LogThis.Middleware
             {
                 return serviceProvider.GetRequiredService<ILogThisScopeFactory>().BeginScope(categoryName);
             }
+        }
+
+        #endregion
+
+        #region Private Methods
+
+        /// <summary>Applies known section values to default options and normalizes custom component names.</summary>
+        /// <param name="section">Configuration section to bind once.</param>
+        /// <returns>Options with defaults for omitted values.</returns>
+        private static LogThisConfiguration BindConfiguration(IConfigurationSection section)
+        {
+            LogThisConfiguration configuration = new();
+            section.Bind(configuration, options => options.ErrorOnUnknownConfiguration = true);
+            Dictionary<string, object> components = new(configuration.MessageComponents);
+            configuration.MessageComponents.Clear();
+            configuration.AddMessageComponents(components);
+            return configuration;
+        }
+
+        /// <summary>Registers a configuration factory and the scope factory for dependency injection.</summary>
+        /// <param name="services">Service collection receiving the registrations.</param>
+        /// <param name="factory">Factory that supplies the configuration singleton.</param>
+        private static void RegisterConfiguration(
+            IServiceCollection services,
+            Func<IServiceProvider, ILogThisConfiguration> factory)
+        {
+            services.AddSingleton(factory);
+            services.AddSingleton<ILogThisScopeFactory, LogThisScopeFactory>();
         }
 
         #endregion
