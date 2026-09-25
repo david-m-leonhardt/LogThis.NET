@@ -33,6 +33,21 @@ jobs:
             throw "Set the NUGET_USER repository variable to your NuGet.org username before publishing."
           }
 
+      - name: Check release branch and version
+        shell: pwsh
+        run: |
+          $version = (dotnet msbuild LogThis.NET.csproj -getProperty:Version).Trim()
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $isPrerelease = $version.Contains('-')
+          if ($env:GITHUB_REF_NAME -eq 'main') {
+            if ($isPrerelease) { throw "main may publish only stable versions; found $version." }
+          } elseif ($env:GITHUB_REF_NAME -eq 'develop') {
+            if (-not $isPrerelease) { throw "develop may publish only prerelease versions; found $version. Merge the release PR to main before publishing." }
+          } else {
+            throw "Publishing is allowed only from main or develop, not $env:GITHUB_REF_NAME."
+          }
+          "Publishing $version from $env:GITHUB_REF_NAME"
+
       - name: Pack both projects
         shell: pwsh
         run: |

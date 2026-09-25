@@ -1,42 +1,47 @@
 # LogThis.NET
 
-LogThis.NET is an in-development .NET library for configurable method-boundary
-logging with `[LogThis]`. It uses `Microsoft.Extensions.Logging` and Metalama's
-compile-time method interception; applications choose their own logging provider.
+LogThis.NET adds configurable method-entry, method-exit, and exception logging
+through the `[LogThis]` attribute. It uses `Microsoft.Extensions.Logging`, so
+applications keep control of their logging provider, and Metalama to weave the
+logging code at build time.
 
 > [!IMPORTANT]
-> This project is under active development. The API may change, and some
-> features are incomplete. ASP.NET Core requests are scoped
-> after you add the LogThis middleware. Console applications and background
-> services establish an explicit logging scope.
+> LogThis.NET 1.0.0 is the first stable release.
 
-## Current requirements
+## Requirements
 
 - .NET 10 SDK
-- `Metalama.Framework` (referenced transitively through the library)
+- A configured `Microsoft.Extensions.Logging` provider
+- `Metalama.Framework`, included transitively by the LogThis.NET packages
 
-The repository builds two libraries: `LogThis.NET` for console applications and
-background services, and `LogThis.NET.AspNetCore` for ASP.NET Core applications.
-The ASP.NET Core package also installs the core package. Console and background
-applications using only `LogThis.NET` do not need the ASP.NET Core runtime.
+Two packages are available:
+
+- `LogThis.NET` contains the attribute, configuration, and explicit scopes for
+  console applications, workers, and other non-HTTP hosts.
+- `LogThis.NET.AspNetCore` adds per-request middleware and includes
+  `LogThis.NET` transitively.
 
 ## Installation
 
-Install the prerelease package appropriate for your application:
+For a console application, worker, or other non-HTTP host:
 
 ```powershell
-dotnet add package LogThis.NET --version 0.1.0-beta.1
-# ASP.NET Core applications install this package instead:
-dotnet add package LogThis.NET.AspNetCore --version 0.1.0-beta.1
+dotnet add package LogThis.NET --version 1.0.0
 ```
 
-`LogThis.NET.AspNetCore` brings in `LogThis.NET` automatically. The packages
-target .NET 10, and applications using `[LogThis]` need the .NET 10 SDK when
-they are built so Metalama can weave the logging code.
+For an ASP.NET Core application:
 
-## Usage
+```powershell
+dotnet add package LogThis.NET.AspNetCore --version 1.0.0
+```
 
-Register LogThis.NET and add its request middleware during application startup:
+Applications using `[LogThis]` must be built with the .NET 10 SDK so Metalama
+can weave the logging code.
+
+## ASP.NET Core quick start
+
+Register LogThis.NET and add its middleware before mapping endpoints that call
+marked methods:
 
 ```csharp
 using LogThis.Middleware;
@@ -54,53 +59,65 @@ app.MapControllers();
 app.Run();
 ```
 
-`UseLogThis` adds middleware that establishes a separate logging scope for each
-request. Place it before endpoints that call methods marked with `[LogThis]`.
+`UseLogThis()` opens an independent logging scope for each request. To use a
+category other than the default `LogThis` category, pass it to the middleware:
 
-For console applications and background services, register an `IConfiguration`
-and call `services.AddLogThisConfiguration()`. LogThis reads the `LogThis` section
-by name when its configuration is first resolved. A plain console application
-can load `appsettings.json` like this (with the
-`Microsoft.Extensions.Configuration.Json` package and the file copied to output):
+```csharp
+app.UseLogThis("MyApplication.Methods");
+```
+
+## Console applications and background services
+
+Non-HTTP applications must register LogThis.NET and keep an explicit scope
+active while marked methods run. A generic host already provides
+`IConfiguration` and logging; register LogThis.NET with its service collection:
+
+```csharp
+services.AddLogThisConfiguration();
+```
+
+For a plain console application, register configuration and logging before
+building the service provider. This example requires
+`Microsoft.Extensions.Configuration.Json` and an `appsettings.json` file that
+is copied to the output directory:
 
 ```csharp
 using LogThis.Middleware;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 IConfiguration configuration = new ConfigurationBuilder()
     .SetBasePath(AppContext.BaseDirectory)
-    .AddJsonFile("appsettings.json", optional: false)
+    .AddJsonFile("appsettings.json", optional: true)
     .Build();
 
 ServiceCollection services = new();
 services.AddSingleton(configuration);
+services.AddLogging(logging => logging.AddConsole());
 services.AddLogThisConfiguration();
+
+using ServiceProvider serviceProvider = services.BuildServiceProvider();
 ```
 
-Then resolve `ILogThisScopeFactory` from the service provider. Keep its scope
-active while calling marked methods:
+Open a scope around the operation that calls marked methods:
 
 ```csharp
-using LogThis.Interfaces;
-using Microsoft.Extensions.DependencyInjection;
-
-ILogThisScopeFactory scopeFactory =
-    serviceProvider.GetRequiredService<ILogThisScopeFactory>();
-
-using (scopeFactory.BeginScope("MyApplication.Worker"))
+using (serviceProvider.UseLogThis("MyApplication.Worker"))
 {
     await RunApplicationAsync();
 }
 ```
 
-The scope flows across `await`. A background service can inject the factory and
-open a scope in `ExecuteAsync`. The same operation is available as
-`serviceProvider.UseLogThis()` after importing `LogThis.Middleware`. Marked
-methods called without an active scope produce no LogThis logs.
+The same operation is available by resolving `ILogThisScopeFactory` and calling
+`BeginScope()`. The scope flows across `await`, making it suitable for a
+background service's `ExecuteAsync` method. Marked methods called without an
+active scope do not produce LogThis events.
 
-Apply `[LogThis]` to a class or method to log entry, exit, and unhandled
-exceptions. A class-level attribute applies to its public concrete methods:
+## Applying `[LogThis]`
+
+Apply the attribute to one method or to a class. A class-level attribute wraps
+each public, non-abstract method:
 
 ```csharp
 using LogThis.Attributes;
@@ -108,67 +125,70 @@ using LogThis.Attributes;
 [LogThis]
 public class OrdersService
 {
-    public void SubmitOrder()
+    public async Task<Order> SubmitOrderAsync(OrderRequest request)
     {
         // Method implementation
     }
 }
 ```
 
-`[LogThis]` logs exit after an awaited method completes and logs exceptions
-thrown during that await. The fallback Metalama template buffers iterator
-methods; do not apply it to long or unbounded iterators without adding
-iterator-specific templates.
+Awaitable methods log their exit after completion and log exceptions thrown
+during the await.
 
-By default, each log includes the access-point message and method name:
+The default events are:
 
-- entry at `Information` with the message `Entered`
-- exit at `Information` with the message `Exited`
-- exceptions at `Error` with the message `Exception` and exception details
-- components separated by ` | `
+| Event | Level | Message |
+| --- | --- | --- |
+| Entry | `Information` | `Entered` |
+| Exit | `Information` | `Exited` |
+| Exception | `Error` | `Exception` |
 
-Class names, arguments, and return values are omitted by default. No custom
-components are registered by default.
+The method name is included by default, and message components are separated by
+` | `. Class names, arguments, return values, and custom properties are omitted
+until enabled.
 
-### Custom configuration
+## Configuration
 
-Use a callback to override defaults in code. When a `LogThis` section is also
-available, its values are bound first and the callback takes precedence:
+### Configure in code
+
+Pass a callback to override the defaults:
 
 ```csharp
 using LogThis.Middleware;
 using Microsoft.Extensions.Logging;
 
-builder.Services.AddLogThisConfiguration(
-    options =>
+builder.Services.AddLogThisConfiguration(options =>
+{
+    options.LogClassName = true;
+    options.LogMethodArguments = true;
+    options.LogMethodReturnValue = true;
+    options.OnEntryConfig.LogLevel = LogLevel.Debug;
+    options.OnEntryConfig.AccessPointMessage = "Starting";
+    options.OnExceptionConfig.AccessPointMessage = "Failed";
+    options.OnExitConfig.AccessPointMessage = "Finished";
+    options.AddMessageComponents(new Dictionary<string, object>
     {
-        options.DebugLogThis = true;
-        options.JsonFieldsToMask = ["Password", "AuthToken"];
-        options.JsonMaskValue = "[REDACTED]";
-        options.LogClassName = true;
-        options.LogMethodArguments = true;
-        options.LogMethodReturnValue = true;
-        options.OnEntryConfig.LogLevel = LogLevel.Debug;
-        options.OnEntryConfig.AccessPointMessage = "Starting";
-        options.OnExceptionConfig.AccessPointMessage = "Failed";
-        options.OnExitConfig.LogLevel = LogLevel.Debug;
-        options.OnExitConfig.AccessPointMessage = "Finished";
-        options.AddMessageComponents(new Dictionary<string, object>
-        {
-            ["Application"] = "Ordering"
-        });
+        ["Application"] = "Ordering"
     });
+});
 ```
 
-Alternatively, bind a `LogThis` section from the application's configuration:
+When application configuration is also available, LogThis binds it first and
+then applies the callback.
+
+### Configure with `appsettings.json`
+
+LogThis automatically reads the `LogThis` section from a registered
+`IConfiguration`:
 
 ```json
 {
   "LogThis": {
-    "JsonFieldsToMask": ["Password", "AuthToken"],
-    "JsonMaskValue": "[REDACTED]",
+    "LogClassName": true,
     "LogMethodArguments": true,
     "LogMethodReturnValue": true,
+    "JsonFieldsToMask": ["Password", "AuthToken"],
+    "JsonMaskValue": "[REDACTED]",
     "MessageComponents": {
       "Application": "Ordering"
     },
@@ -177,133 +197,85 @@ Alternatively, bind a `LogThis` section from the application's configuration:
       "AccessPointMessage": "Starting"
     },
     "OnExceptionConfig": {
-      "LogLevel": "Error"
+      "LogLevel": "Error",
+      "AccessPointMessage": "Failed"
+    },
+    "OnExitConfig": {
+      "AccessPointMessage": "Finished"
     }
   }
 }
 ```
 
-```csharp
-builder.Services.AddLogThisConfiguration(); // ASP.NET Core
-// or: services.AddLogThisConfiguration(); // IConfiguration registered in DI
-```
+Omitted settings keep their defaults. Unknown keys in an existing `LogThis`
+section cause an error when configuration is first resolved. If the section is
+absent, LogThis uses all defaults. Configuration is read once per service
+provider; file reloads do not update an active provider.
 
-This works with ASP.NET Core's `WebApplicationBuilder` and with a generic host
-for a console application or background service. A plain `ServiceCollection`
-caller can register an `IConfiguration` as shown above. The
-section uses the property names of `LogThisConfiguration`; event settings live
-under `OnEntryConfig`, `OnExceptionConfig`, and `OnExitConfig`. Omitted values keep their
-defaults, and bound `MessageComponents` keys are normalized into logging
-placeholders. Unknown keys inside a present `LogThis` section cause an error when
-the LogThis configuration is first resolved. If `IConfiguration` is not
-registered or the whole `LogThis` section is absent, LogThis uses its defaults;
-therefore a misspelled section name cannot be distinguished from an intentionally
-absent section. Configuration is read once when first resolved; file reloads do
-not update an active LogThis service provider.
+An application can also pass a specific `IConfigurationSection` or a prepared
+`LogThisConfiguration` instance to `AddLogThisConfiguration`.
 
-The component switches control the structured properties added to a message:
+### Options
 
-- `LogClassName` adds `{Class}`.
-- `LogMethodName` adds `{Method}`.
-- `LogMethodArguments` adds `{Arguments}` to entry and exception logs.
-- `LogMethodReturnValue` adds `{ReturnValue}` to exit logs. It also adds an
-  empty return-value component to exception logs; a failed method has no result.
-- `MessageComponents` adds application-specific properties to every log.
-- `OnEntryConfig.LogAccessPoint`, `OnExceptionConfig.LogAccessPoint`, and
-  `OnExitConfig.LogAccessPoint` independently enable each method access point.
+| Option | Default | Effect |
+| --- | --- | --- |
+| `LogClassName` | `false` | Adds the declaring class as `{Class}`. |
+| `LogMethodName` | `true` | Adds the method as `{Method}`. |
+| `LogMethodArguments` | `false` | Adds `{Arguments}` to entry and exception events. |
+| `LogMethodReturnValue` | `false` | Adds `{ReturnValue}` to exit events and an empty value to exception events. |
+| `MessageDelimeter` | Space, pipe, space | Separates placeholders in the message template. |
+| `MessageComponents` | Empty | Adds custom structured properties to every event. |
+| `JsonFieldsToMask` | Empty | Lists JSON property names to redact. |
+| `JsonMaskValue` | `"*****"` | Sets the replacement for redacted values. |
+| `DebugLogThis` | `false` | Enables best-effort console diagnostics for internal LogThis failures. |
 
-LogThis checks the configured provider's level for each access point before
-formatting the message or serializing its arguments or return value. The aspect
-still creates its method context and captures the argument array when the
-method is called, even if that log level is filtered out.
+`OnEntryConfig`, `OnExceptionConfig`, and `OnExitConfig` each provide:
 
-`DebugLogThis` writes a `Debug` diagnostic to the console if message
-construction or the configured provider fails. This diagnostic uses a separate
-console logger: it does not go to the application's configured log4net, Serilog,
-NLog, or other logging provider. The console diagnostic is best-effort; its own
-failure is suppressed so it cannot replace the application's result or exception.
+- `LogAccessPoint` to enable or disable that event
+- `LogLevel` to select its severity
+- `AccessPointMessage` to change its message
 
-You can also construct `LogThisConfiguration`, modify its access-point
-configurations, and register it directly:
+## Sensitive-data masking
+
+When argument or return-value logging is enabled, LogThis serializes those
+values. Every property whose name matches `JsonFieldsToMask`, ignoring case, is
+replaced with `JsonMaskValue` at any nesting depth:
 
 ```csharp
-using LogThis.Entities;
-using LogThis.Middleware;
-using Microsoft.Extensions.Logging;
-
-LogThisConfiguration logThisConfiguration = new()
+builder.Services.AddLogThisConfiguration(options =>
 {
-    LogClassName = true,
-    LogMethodArguments = true,
-    LogMethodReturnValue = true
-};
-
-logThisConfiguration.OnEntryConfig.LogLevel = LogLevel.Debug;
-logThisConfiguration.OnExceptionConfig.LogLevel = LogLevel.Critical;
-logThisConfiguration.OnExitConfig.LogAccessPoint = false;
-
-logThisConfiguration.AddMessageComponents(new Dictionary<string, object>
-{
-    ["Application"] = "Ordering"
+    options.JsonFieldsToMask = ["Password", "AuthToken"];
+    options.JsonMaskValue = "*****";
+    options.LogMethodArguments = true;
+    options.LogMethodReturnValue = true;
 });
-
-builder.Services.AddLogThisConfiguration(logThisConfiguration);
 ```
 
-Pass a category name to `UseLogThis` if the default `LogThis` logging category
-is not suitable:
+The rule also applies to objects in nested arrays, and a match replaces the
+property's entire value. Dotted paths, wildcards, and partial-value masking are
+not supported. Original objects are not modified.
 
-```csharp
-app.UseLogThis("MyApplication.Methods");
-```
+Do not rely on masking alone to protect sensitive information: fields not on
+the list are logged unchanged. Enable argument and return-value logging only
+when it is appropriate for the application's data and volume.
 
-### Masking sensitive fields
+## Behavior and limitations
 
-When argument or return-value logging is enabled, values are serialized before
-they are logged. Every property whose name matches `JsonFieldsToMask`
-(case-insensitively) is replaced with `JsonMaskValue`, regardless of its depth:
+- LogThis checks whether the configured level is enabled before formatting a
+  message or serializing arguments and return values. The woven method still
+  creates its context and captures its arguments when called.
+- `DebugLogThis` reports internal logging failures through a separate console
+  logger. Those diagnostics do not use the application's configured provider,
+  and failures in the diagnostic itself are suppressed.
+- The fallback Metalama template buffers iterator methods. Avoid applying
+  `[LogThis]` to long-running or unbounded iterators until iterator-specific
+  templates are available.
+- An exception event can include an empty return-value component, but a failed
+  method has no result to log.
 
-```csharp
-builder.Services.AddLogThisConfiguration(
-    options =>
-    {
-        options.JsonFieldsToMask = ["Password", "AuthToken"];
-        options.JsonMaskValue = "*****";
-        options.LogMethodArguments = true;
-        options.LogMethodReturnValue = true;
-    });
-```
+## Building from source
 
-Arguments are serialized one value at a time. Objects inside arrays, including
-nested arrays, are masked using the same rule. A matched property's entire value
-is replaced, whether that value is a scalar, object, or array. Only property
-names are supported; dotted paths, wildcards, and partial-value masking are not
-available. The original objects are not changed. Do not rely on this list alone
-to protect sensitive data: unlisted fields are not masked automatically. Enable
-argument and return-value logging only when appropriate for the data and volume
-handled by the application.
-
-## Development
-
-To work from source instead of using NuGet packages, reference the core project
-from a console or background application:
-
-```xml
-<ItemGroup>
-  <ProjectReference Include="..\LogThis\LogThis.NET.csproj" />
-</ItemGroup>
-```
-
-For an ASP.NET Core application, reference the integration project instead; it
-also brings in the core library:
-
-```xml
-<ItemGroup>
-  <ProjectReference Include="..\LogThis\LogThis.NET.AspNetCore\LogThis.NET.AspNetCore.csproj" />
-</ItemGroup>
-```
-
-From the repository root, restore and build both libraries with:
+Restore and build both packages from the repository root:
 
 ```powershell
 dotnet restore LogThis.NET.csproj
@@ -311,14 +283,9 @@ dotnet build LogThis.NET.csproj
 dotnet build LogThis.NET.AspNetCore/LogThis.NET.AspNetCore.csproj
 ```
 
-The build emits `LogThis.NET.xml` alongside the library DLL for API-documentation
-tools. Release setup and the manual publishing workflow are documented in
-[PUBLISHING.md](https://github.com/david-m-leonhardt/LogThis.NET/blob/main/PUBLISHING.md).
-
-The `LogThis.ApiTester` and `LogThis.consoleTester` projects are development
-harnesses in sibling directories rather than supported packages.
+The builds emit XML API-documentation files alongside their assemblies.
 
 ## License
 
-This project is licensed under the terms in
-[LICENSE](https://github.com/david-m-leonhardt/LogThis.NET/blob/main/LICENSE).
+LogThis.NET is licensed under the terms of the
+[MIT License](https://github.com/david-m-leonhardt/LogThis.NET/blob/main/LICENSE).
