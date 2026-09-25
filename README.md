@@ -19,11 +19,10 @@ The repository builds two libraries: `LogThis.NET` for console applications and
 background services, and `LogThis.NET.AspNetCore` for ASP.NET Core applications.
 The ASP.NET Core package also installs the core package. Console and background
 applications using only `LogThis.NET` do not need the ASP.NET Core runtime.
-The packages are not yet published to NuGet.org.
 
-## Usage
+## Installation
 
-After publication, install the prerelease package appropriate for the host:
+Install the prerelease package appropriate for your application:
 
 ```powershell
 dotnet add package LogThis.NET --version 0.1.0-beta.1
@@ -31,23 +30,11 @@ dotnet add package LogThis.NET --version 0.1.0-beta.1
 dotnet add package LogThis.NET.AspNetCore --version 0.1.0-beta.1
 ```
 
-Until then, reference `LogThis.NET.csproj` from a console or background
-application while developing locally:
+`LogThis.NET.AspNetCore` brings in `LogThis.NET` automatically. The packages
+target .NET 10, and applications using `[LogThis]` need the .NET 10 SDK when
+they are built so Metalama can weave the logging code.
 
-```xml
-<ItemGroup>
-  <ProjectReference Include="..\LogThis\LogThis.NET.csproj" />
-</ItemGroup>
-```
-
-For an ASP.NET Core application, reference the integration project instead; it
-also brings in the core library:
-
-```xml
-<ItemGroup>
-  <ProjectReference Include="..\LogThis\LogThis.NET.AspNetCore\LogThis.NET.AspNetCore.csproj" />
-</ItemGroup>
-```
+## Usage
 
 Register LogThis.NET and add its request middleware during application startup:
 
@@ -298,7 +285,25 @@ handled by the application.
 
 ## Development
 
-From the repository root, restore and build the library with:
+To work from source instead of using NuGet packages, reference the core project
+from a console or background application:
+
+```xml
+<ItemGroup>
+  <ProjectReference Include="..\LogThis\LogThis.NET.csproj" />
+</ItemGroup>
+```
+
+For an ASP.NET Core application, reference the integration project instead; it
+also brings in the core library:
+
+```xml
+<ItemGroup>
+  <ProjectReference Include="..\LogThis\LogThis.NET.AspNetCore\LogThis.NET.AspNetCore.csproj" />
+</ItemGroup>
+```
+
+From the repository root, restore and build both libraries with:
 
 ```powershell
 dotnet restore LogThis.NET.csproj
@@ -307,11 +312,13 @@ dotnet build LogThis.NET.AspNetCore/LogThis.NET.AspNetCore.csproj
 ```
 
 The build emits `LogThis.NET.xml` alongside the library DLL for API-documentation
-tools.
+tools. Release setup and the manual publishing workflow are documented in
+[PUBLISHING.md](https://github.com/david-m-leonhardt/LogThis.NET/blob/main/PUBLISHING.md).
 
 The `LogThis.ApiTester` and `LogThis.consoleTester` projects are development
 harnesses in sibling directories rather than supported packages.
 
 ## License
 
-This project is licensed under the terms in [LICENSE](LICENSE).
+This project is licensed under the terms in
+[LICENSE](https://github.com/david-m-leonhardt/LogThis.NET/blob/main/LICENSE).
