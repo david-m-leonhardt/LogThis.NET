@@ -1,0 +1,78 @@
+name: Publish NuGet packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: nuget-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Check NuGet username
+        shell: pwsh
+        env:
+          NUGET_USER: ${{ vars.NUGET_USER }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:NUGET_USER)) {
+            throw "Set the NUGET_USER repository variable to your NuGet.org username before publishing."
+          }
+
+      - name: Pack both projects
+        shell: pwsh
+        run: |
+          dotnet pack LogThis.NET.AspNetCore/LogThis.NET.AspNetCore.csproj -c Release -o artifacts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet pack LogThis.NET.csproj -c Release --no-build -o artifacts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Check package files
+        shell: pwsh
+        run: |
+          $version = (dotnet msbuild LogThis.NET.csproj -getProperty:Version).Trim()
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $expected = @(
+            "artifacts/LogThis.NET.$version.nupkg",
+            "artifacts/LogThis.NET.AspNetCore.$version.nupkg"
+          )
+          foreach ($package in $expected) {
+            if (-not (Test-Path -LiteralPath $package)) {
+              throw "Expected package was not created: $package"
+            }
+          }
+          "Package version: $version"
+          $expected
+
+      - name: Get short-lived NuGet.org publishing key
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Publish core, then ASP.NET Core integration
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: |
+          $version = (dotnet msbuild LogThis.NET.csproj -getProperty:Version).Trim()
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $source = "https://api.nuget.org/v3/index.json"
+          dotnet nuget push "artifacts/LogThis.NET.$version.nupkg" --api-key $env:NUGET_API_KEY --source $source --skip-duplicate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet nuget push "artifacts/LogThis.NET.AspNetCore.$version.nupkg" --api-key $env:NUGET_API_KEY --source $source --skip-duplicate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -1,0 +1,49 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
+    <PackageId>LogThis.NET</PackageId>
+    <Title>LogThis.NET</Title>
+    <Description>Attribute-based method entry, exit, and exception logging for .NET applications using Microsoft.Extensions.Logging and Metalama.</Description>
+    <PackageTags>logging method-logging aop metalama diagnostics</PackageTags>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <!-- Metalama maps an XML-doc diagnostic from generated advice to the aspect source. -->
+    <NoWarn>1701;1702;IDE0130;CA2254;CS1587</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <!-- Keep XML docs on the public aspect templates despite the generated advice diagnostic. -->
+    <NoWarn>1701;1702;IDE0130;CA2254;CS1587</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="LogThis.NET.AspNetCore\**\*.cs" />
+    <Compile Remove="tests\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Metalama.Framework" Version="2026.1.28" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.11" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="LICENSE">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Update="README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
+</Project>

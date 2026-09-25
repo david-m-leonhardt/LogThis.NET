@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <Version>0.1.0-beta.1</Version>
+    <Authors>david-m-leonhardt</Authors>
+    <PackageProjectUrl>https://github.com/david-m-leonhardt/LogThis.NET</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/david-m-leonhardt/LogThis.NET.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+</Project>
