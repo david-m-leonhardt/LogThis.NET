@@ -1,13 +1,12 @@
 ﻿using LogThis.Constants;
 using LogThis.Entities;
 using LogThis.Interfaces;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LogThis.Middleware
 {
-    /// <summary>Registers LogThis options and opens runtime scopes for HTTP or manual callers.</summary>
+    /// <summary>Registers LogThis options and opens runtime scopes for manual callers.</summary>
     public static class LogThisMiddleware
     {
         #region Private Properties
@@ -56,29 +55,6 @@ namespace LogThis.Middleware
                 ArgumentNullException.ThrowIfNull(logThisConfiguration);
 
                 RegisterConfiguration(services, _ => logThisConfiguration);
-            }
-        }
-
-        // HTTP requests get their own scope; no ambient state is retained between requests.
-        extension(WebApplication app)
-        {
-            /// <summary>Adds HTTP scope middleware using the default logger category.</summary>
-            public void UseLogThis()
-            {
-                UseLogThis(app, MessageComponentConstants.DefaultCategoryName);
-            }
-
-            /// <summary>Opens an independent ambient scope around each ASP.NET Core request.</summary>
-            /// <param name="categoryName">Logger category assigned to request events.</param>
-            /// <exception cref="InvalidOperationException">LogThis services have not been registered.</exception>
-            public void UseLogThis(string categoryName)
-            {
-                ILogThisScopeFactory scopeFactory = app.Services.GetRequiredService<ILogThisScopeFactory>();
-                app.Use(async (_, next) =>
-                {
-                    using IDisposable scope = scopeFactory.BeginScope(categoryName);
-                    await next();
-                });
             }
         }
 

@@ -15,16 +15,37 @@ compile-time method interception; applications choose their own logging provider
 - .NET 10 SDK
 - `Metalama.Framework` (referenced transitively through the library)
 
-The repository currently builds the library from source; package-distribution
-instructions will be added when a package is published.
+The repository builds two libraries: `LogThis.NET` for console applications and
+background services, and `LogThis.NET.AspNetCore` for ASP.NET Core applications.
+The ASP.NET Core package also installs the core package. Console and background
+applications using only `LogThis.NET` do not need the ASP.NET Core runtime.
+The packages are not yet published to NuGet.org.
 
 ## Usage
 
-Reference `LogThis.NET.csproj` from your application while developing locally:
+After publication, install the prerelease package appropriate for the host:
+
+```powershell
+dotnet add package LogThis.NET --version 0.1.0-beta.1
+# ASP.NET Core applications install this package instead:
+dotnet add package LogThis.NET.AspNetCore --version 0.1.0-beta.1
+```
+
+Until then, reference `LogThis.NET.csproj` from a console or background
+application while developing locally:
 
 ```xml
 <ItemGroup>
   <ProjectReference Include="..\LogThis\LogThis.NET.csproj" />
+</ItemGroup>
+```
+
+For an ASP.NET Core application, reference the integration project instead; it
+also brings in the core library:
+
+```xml
+<ItemGroup>
+  <ProjectReference Include="..\LogThis\LogThis.NET.AspNetCore\LogThis.NET.AspNetCore.csproj" />
 </ItemGroup>
 ```
 
@@ -282,6 +303,7 @@ From the repository root, restore and build the library with:
 ```powershell
 dotnet restore LogThis.NET.csproj
 dotnet build LogThis.NET.csproj
+dotnet build LogThis.NET.AspNetCore/LogThis.NET.AspNetCore.csproj
 ```
 
 The build emits `LogThis.NET.xml` alongside the library DLL for API-documentation

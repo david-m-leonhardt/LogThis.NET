@@ -5,8 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
+    <PackageId>LogThis.NET</PackageId>
+    <Title>LogThis.NET</Title>
+    <Description>Attribute-based method entry, exit, and exception logging for .NET applications using Microsoft.Extensions.Logging and Metalama.</Description>
+    <PackageTags>logging method-logging aop metalama diagnostics</PackageTags>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -20,11 +23,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="LogThis.NET.AspNetCore\**\*.cs" />
     <Compile Remove="tests\**\*.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Metalama.Framework" Version="2026.1.28" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.11" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
@@ -33,10 +40,10 @@
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
-  </ItemGroup>
-
-  <ItemGroup>
-	<FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <None Update="README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>
