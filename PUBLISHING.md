@@ -17,16 +17,23 @@ are ready; NuGet.org does not allow replacing an existing package version.
 
 ## Each release
 
-1. Set the shared version in `Directory.Build.props`, and update any versioned
-   install commands in `README.md`. Commit and push the release source. Merge
-   the workflow into the repository's default `main` branch so its manual
-   trigger appears in GitHub Actions.
-2. In GitHub Actions, choose **Publish NuGet packages**, select the release
-   branch, and click **Run workflow**. The workflow builds both packages,
+1. On `develop`, set the shared version in `Directory.Build.props` and update
+   any versioned install commands in `README.md`. Use an unsuffixed version
+   such as `1.0.0` for a stable release. Commit and push the release source,
+   then merge `develop` into `main` through a pull request. Do not publish the
+   stable version from `develop`.
+2. In GitHub Actions, choose **Publish NuGet packages**, select `main`, and
+   click **Run workflow**. The workflow builds both packages,
    obtains a short-lived publishing key, then pushes `LogThis.NET` before
    `LogThis.NET.AspNetCore`.
 3. Wait for NuGet.org validation and indexing. Confirm both package pages and
    install the published packages in fresh console and ASP.NET Core projects.
+4. After the stable release, advance `develop` to the next unique prerelease
+   version (for example, `1.1.0-beta.1`) before publishing from that branch.
+
+The workflow permits only stable versions from `main` and only prerelease
+versions from `develop`. Both packages use the same version so the ASP.NET Core
+package depends on the matching core package.
 
 The workflow uses `--skip-duplicate` so a failed run can be retried from the
 **same commit** if one package was already accepted. If source changes after

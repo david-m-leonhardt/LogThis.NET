@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <Version>0.1.0-beta.1</Version>
+    <Version>1.0.0</Version>
     <Authors>david-m-leonhardt</Authors>
     <PackageProjectUrl>https://github.com/david-m-leonhardt/LogThis.NET</PackageProjectUrl>
     <RepositoryUrl>https://github.com/david-m-leonhardt/LogThis.NET.git</RepositoryUrl>
