@@ -59,7 +59,7 @@ public static class LogThisRuntimeLogger
             if (arguments != null && configuration.LogMethodArguments)
             {
                 parameters.AddMessage(MessageComponentConstants.ArgumentsLabel);
-                parameters.AddArgs($"Arguments: {LogThisValueMasker.MaskObjects(arguments!)}");
+                parameters.AddArgs($"Arguments: {LogThisValueMasker.MaskArguments(context)}");
             }
 
             if (arguments == null && configuration.LogMethodReturnValue ||

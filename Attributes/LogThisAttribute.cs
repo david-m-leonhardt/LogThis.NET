@@ -24,9 +24,9 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
 
     #region Public Methods
 
-    // Applies the method templates to eligible members of an annotated class.
-    // The explicit Metalama interface member is not included in consumer-facing XML output.
-    void IAspect<INamedType>.BuildAspect(IAspectBuilder<INamedType> builder)
+    /// <summary>Instruments eligible public methods of an annotated class, respecting method exclusions.</summary>
+    /// <param name="builder">Builder for the annotated class.</param>
+    public void BuildAspect(IAspectBuilder<INamedType> builder)
     {
         // Class-level use advises methods; method-level use is handled by OverrideMethodAspect.
         MethodTemplateSelector templates = new(
@@ -37,21 +37,37 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
 
         foreach (IMethod method in builder.Target.Methods)
         {
-            if (method.Accessibility == Accessibility.Public && !method.IsAbstract)
+            if (method.Accessibility == Accessibility.Public && !method.IsAbstract &&
+                !method.Attributes.OfAttributeType(typeof(DontLogThisAttribute)).Any())
             {
                 builder.With(method).Override(templates);
             }
         }
     }
 
+    /// <summary>Instruments a method unless it explicitly opts out of LogThis.</summary>
+    /// <param name="builder">Builder for the annotated method.</param>
+    public override void BuildAspect(IAspectBuilder<IMethod> builder)
+    {
+        if (builder.Target.Attributes.OfAttributeType(typeof(DontLogThisAttribute)).Any())
+        {
+            builder.SkipAspect();
+            return;
+        }
+
+        base.BuildAspect(builder);
+    }
+
     /// <summary>Wraps an awaitable method and logs its completed result or failure.</summary>
     /// <returns>The original method's result after it completes, if any.</returns>
     public override async Task<dynamic?> OverrideAsyncMethod()
     {
-        LogThisMethodContext context = new(
+        List<KeyValuePair<string, object?>> arguments = new();
+        CaptureArguments(arguments);
+        LogThisMethodContext context = LogThisMethodContext.FromNamedArguments(
             meta.Target.Method.Name,
             meta.Target.Method.DeclaringType.Name,
-            meta.Target.Parameters.ToValueArray());
+            arguments.ToArray());
 
         global::LogThis.Entities.LogThisRuntimeLogger.Entry(context);
 
@@ -73,10 +89,12 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
     /// <returns>The original method's result, if any.</returns>
     public override dynamic? OverrideMethod()
     {
-        LogThisMethodContext context = new(
+        List<KeyValuePair<string, object?>> arguments = new();
+        CaptureArguments(arguments);
+        LogThisMethodContext context = LogThisMethodContext.FromNamedArguments(
             meta.Target.Method.Name,
             meta.Target.Method.DeclaringType.Name,
-            meta.Target.Parameters.ToValueArray());
+            arguments.ToArray());
 
         global::LogThis.Entities.LogThisRuntimeLogger.Entry(context);
 
@@ -90,6 +108,24 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
         {
             global::LogThis.Entities.LogThisRuntimeLogger.Exception(context, exception);
             throw;
+        }
+    }
+
+    #endregion
+
+    #region Private Methods
+
+    // The compile-time loop emits reads only for included parameters.
+    [Template]
+    private void CaptureArguments(List<KeyValuePair<string, object?>> arguments)
+    {
+        foreach (IParameter parameter in meta.Target.Parameters)
+        {
+            if (!parameter.Attributes.OfAttributeType(typeof(DontLogThisAttribute)).Any())
+            {
+                arguments.Add(new KeyValuePair<string, object?>(
+                    parameter.Name, parameter.RefKind == RefKind.Out ? null : parameter.Value));
+            }
         }
     }
 

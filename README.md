@@ -6,6 +6,7 @@ applications keep control of their logging provider, and Metalama to weave the
 logging code at build time.
 
 > [!IMPORTANT]
+> This branch targets the upcoming 1.1.0-beta.1 prerelease, including `[DontLogThis]`.
 > LogThis.NET 1.0.0 is the first stable release.
 
 ## Requirements
@@ -26,13 +27,13 @@ Two packages are available:
 For a console application, worker, or other non-HTTP host:
 
 ```powershell
-dotnet add package LogThis.NET --version 1.0.0
+dotnet add package LogThis.NET --version 1.1.0-beta.1
 ```
 
 For an ASP.NET Core application:
 
 ```powershell
-dotnet add package LogThis.NET.AspNetCore --version 1.0.0
+dotnet add package LogThis.NET.AspNetCore --version 1.1.0-beta.1
 ```
 
 Applications using `[LogThis]` must be built with the .NET 10 SDK so Metalama
@@ -65,6 +66,114 @@ category other than the default `LogThis` category, pass it to the middleware:
 ```csharp
 app.UseLogThis("MyApplication.Methods");
 ```
+
+## Logging provider setup
+
+LogThis.NET writes through `Microsoft.Extensions.Logging`; it does not require
+an `ILogger` instance to be passed during registration. Configure a logging
+provider on the host, and then call `AddLogThisConfiguration()`. When
+`UseLogThis()` opens a request scope, LogThis uses the DI-managed
+`ILoggerFactory` to create its category logger.
+
+The following examples show the relevant startup registration for common
+providers. After any ASP.NET Core example, build the application and add the
+LogThis middleware as shown in the quick start:
+
+```csharp
+WebApplication app = builder.Build();
+
+app.UseLogThis();
+app.MapControllers();
+
+app.Run();
+```
+
+### Built-in console logger
+
+The console provider is useful for a minimal setup and local development:
+
+```csharp
+using LogThis.Middleware;
+using Microsoft.Extensions.Logging;
+
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Logging.AddSimpleConsole(options => options.SingleLine = true);
+
+builder.Services.AddLogThisConfiguration();
+builder.Services.AddControllers();
+```
+
+ASP.NET Core includes the console provider. A non-hosted console application can
+register it with `services.AddLogging(logging => logging.AddConsole())`, as
+shown in the next section.
+
+### log4net
+
+Install `Microsoft.Extensions.Logging.Log4Net.AspNetCore`, add a
+`log4net.config` file, and copy that file to the output directory:
+
+```csharp
+using LogThis.Middleware;
+using Microsoft.Extensions.Logging;
+
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Logging.AddLog4Net();
+
+builder.Services.AddLogThisConfiguration();
+builder.Services.AddControllers();
+```
+
+The logging provider's default configuration filename is `log4net.config`.
+
+### Serilog
+
+Install `Serilog.AspNetCore` and the sinks required by the application. This
+example uses the console sink:
+
+```csharp
+using LogThis.Middleware;
+using Serilog;
+
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddSerilog((services, loggerConfiguration) =>
+    loggerConfiguration
+        .ReadFrom.Configuration(builder.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .WriteTo.Console());
+
+builder.Services.AddLogThisConfiguration();
+builder.Services.AddControllers();
+```
+
+`AddSerilog()` routes events from `Microsoft.Extensions.Logging`, including
+LogThis events, through the Serilog pipeline.
+
+### NLog
+
+Install `NLog.Web.AspNetCore` and add an `NLog.config` file:
+
+```csharp
+using LogThis.Middleware;
+using NLog.Web;
+
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Host.UseNLog();
+
+builder.Services.AddLogThisConfiguration();
+builder.Services.AddControllers();
+```
+
+`UseNLog()` connects the host's `Microsoft.Extensions.Logging` pipeline to
+NLog. Provider-specific targets, levels, and formatting remain the
+application's responsibility.
 
 ## Console applications and background services
 
@@ -146,6 +255,131 @@ The default events are:
 The method name is included by default, and message components are separated by
 ` | `. Class names, arguments, return values, and custom properties are omitted
 until enabled.
+
+### Excluding a method with `[DontLogThis]`
+
+Use `[DontLogThis]` to prevent LogThis from intercepting a particular method:
+
+```csharp
+[LogThis]
+public class OrderService(ILogger<OrderService> logger)
+{
+    [DontLogThis]
+    public void SubmitOrder()
+    {
+        logger.LogInformation("Submitting order");
+        ValidateOrder();
+    }
+
+    public void ValidateOrder() { }
+}
+```
+
+LogThis generates no entry, exit, or exception events for `SubmitOrder`.
+Explicit `ILogger` calls are unaffected by either attribute and retain their
+normal provider and log-level filtering. Called methods such as `ValidateOrder`
+follow their own instrumentation rules; no ambient logging state is disabled.
+Return values and exception propagation are unchanged, including for async methods.
+An instrumented caller can still log its own failure when an excluded method throws.
+
+The exclusion takes precedence even when `[LogThis]` is also applied directly to
+the method. It is harmless on a method that would not otherwise be instrumented.
+It applies only to the annotated method: annotate other overloads, overrides,
+or interface implementations separately. Class and constructor exclusions are
+not supported.
+
+### Excluding parameters and properties
+
+The same `[DontLogThis]` attribute can omit a parameter from argument capture
+or a property from object capture:
+
+```csharp
+using LogThis.Attributes;
+
+public class OrderRequest
+{
+    public string OrderId { get; set; } = "";
+
+    [DontLogThis]
+    public string PaymentToken { get; set; } = "";
+}
+
+[LogThis]
+public class CheckoutService
+{
+    public OrderRequest Submit(OrderRequest request, [DontLogThis] string apiKey)
+    {
+        // Normal application code can still use request.PaymentToken and apiKey.
+        return request;
+    }
+}
+```
+
+With `LogMethodArguments` enabled, `apiKey` is omitted entirely, with no name,
+value, or masking placeholder. Included arguments are logged as a JSON object
+of parameter names and values in declaration order. If all parameters are
+excluded, arguments are logged as `{}` and configured events still occur.
+
+`PaymentToken` is omitted whenever LogThis captures an `OrderRequest`, including
+arguments, return values, nested objects, and objects in collections. Excluded
+properties are skipped before serialization, so logging does not invoke their
+getters. Included data retains the existing JSON serialization and masking rules;
+exclusion means omission, not replacement with `JsonMaskValue`. Application
+objects, method results, and exceptions are not modified.
+
+Exclusions are independent: an excluded parameter can still be captured as a
+return value or by a called method, with property exclusions applied in each
+capture. An excluded method does not disable property exclusions in other methods.
+
+Configuration determines which entry, exit, and exception events occur and
+whether arguments or return values are captured. Exclusions only remove eligible
+methods or data; they never enable capture. Parameter and property exclusions
+have no effect when the corresponding data capture is disabled. They remain
+valid without build warnings because configuration is resolved at runtime and
+capture can be enabled later.
+
+These exclusions govern data captured by LogThis. They do **not** sanitize explicit
+application logs or exception-message text. An application can still explicitly
+log an excluded value, and an exception message can still contain that value.
+
+### Named argument output and compatibility
+
+Parameter names come from method metadata at build time and are paired with
+their values when the method is called. For example:
+
+```csharp
+[LogThis]
+public void Authenticate(string username, [DontLogThis] string password, bool rememberMe)
+{
+    // Application code
+}
+```
+
+With `LogMethodArguments = true`, calling `Authenticate("alice", "secret", true)`
+produces this argument component on entry (and on an exception event if it throws):
+
+```text
+Arguments: {"username":"alice","rememberMe":true}
+```
+
+Null included arguments retain their names with a `null` value. Property
+exclusions and `JsonFieldsToMask` still apply within each included value;
+parameter names themselves do not expand the property-masking rules. Use
+`[DontLogThis]` to omit a parameter. Disabling argument logging omits the entire
+argument component and avoids serialization, while configured events continue.
+
+This prerelease changes newly woven argument output from a positional array to
+a named JSON object. Update log parsers that depend on the old format and rebuild
+consumer applications to capture names. The structured `{Arguments}` field still
+contains the formatted `Arguments: ...` string; it is not a new set of logger fields.
+Renaming a source parameter changes its logged JSON key after rebuilding.
+
+The public `LogThisMethodContext(string, string, object?[])` constructor and
+`Arguments` property remain available. Existing compiled instrumentation and
+manual contexts using that constructor keep positional output because they have
+no parameter names. New instrumentation uses `FromNamedArguments` and the
+`NamedArguments` property; `Arguments` also exposes the corresponding values for
+compatibility. Use the new factory for manual contexts that need named output.
 
 ## Configuration
 

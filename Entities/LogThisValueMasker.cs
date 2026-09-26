@@ -11,7 +11,8 @@ internal static class LogThisValueMasker
     // Omit null members before masking to match the library's logged JSON representation.
     private static readonly JsonSerializerSettings SerializerSettings = new()
     {
-        NullValueHandling = NullValueHandling.Ignore
+        NullValueHandling = NullValueHandling.Ignore,
+        ContractResolver = new LogThisContractResolver()
     };
 
     #endregion
@@ -21,7 +22,24 @@ internal static class LogThisValueMasker
     /// <summary>Serializes one value and masks matching properties at any depth.</summary>
     /// <param name="value">Value to serialize and mask.</param>
     /// <returns>Serialized JSON with matching property values replaced.</returns>
-    internal static string MaskObject(object? value) => MaskJson(value);
+    internal static string MaskObject(object? value) => MaskJson(value).ToString(Formatting.None);
+
+    /// <summary>Formats named arguments in declaration order, retaining positional output for legacy contexts.</summary>
+    /// <param name="context">Method context whose arguments should be captured.</param>
+    /// <returns>A JSON object of names and masked values, or a legacy positional list.</returns>
+    internal static string MaskArguments(LogThisMethodContext context)
+    {
+        if (context.NamedArguments == null) return MaskObjects(context.Arguments);
+
+        JObject arguments = new();
+        foreach (KeyValuePair<string, object?> argument in context.NamedArguments)
+        {
+            // Mask each value before adding its parameter name, preserving property-based masking semantics.
+            arguments.Add(argument.Key, MaskJson(argument.Value));
+        }
+
+        return arguments.ToString(Formatting.None);
+    }
 
     /// <summary>Serializes and masks each argument, then combines them as a display list.</summary>
     /// <param name="values">Values to serialize and mask individually.</param>
@@ -32,7 +50,7 @@ internal static class LogThisValueMasker
         List<string> masked = [];
         foreach (object? value in values)
         {
-            masked.Add(MaskJson(value));
+            masked.Add(MaskObject(value));
         }
 
         return $"[{string.Join(", ", masked)}]";
@@ -44,9 +62,9 @@ internal static class LogThisValueMasker
 
     /// <summary>Serializes a value and masks matching properties in objects and arrays recursively.</summary>
     /// <param name="value">Value to serialize.</param>
-    /// <returns>Compact JSON with matched property values replaced.</returns>
+    /// <returns>A JSON token with matched property values replaced.</returns>
     /// <exception cref="InvalidOperationException">A value is processed without an active LogThis scope.</exception>
-    private static string MaskJson(object? value)
+    private static JToken MaskJson(object? value)
     {
         LogThisRuntime runtime = LogThisRuntimeContext.Current
             ?? throw new InvalidOperationException("No LogThis scope is active.");
@@ -55,7 +73,7 @@ internal static class LogThisValueMasker
             : JToken.FromObject(value, JsonSerializer.Create(SerializerSettings));
         HashSet<string> names = new(runtime.Configuration.JsonFieldsToMask, StringComparer.OrdinalIgnoreCase);
         MaskToken(token, names, runtime.Configuration.JsonMaskValue);
-        return token.ToString(Formatting.None);
+        return token;
     }
 
     /// <summary>Replaces matching property values and descends through unmatched objects and arrays.</summary>
