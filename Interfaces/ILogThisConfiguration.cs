@@ -21,9 +21,23 @@
         /// <value><see langword="true"/> to add a class component.</value>
         bool LogClassName { get; set; }
 
+        /// <summary>Includes friendly component labels in message templates without changing structured values.</summary>
+        /// <value><see langword="true"/> by default.</value>
+        bool LogComponentLabels { get; set; }
+
+        /// <summary>Creates a correlation ID when the outermost LogThis scope starts.</summary>
+        /// <remarks>The ID has 16 case-sensitive alphanumeric characters and flows across awaits. Nested scopes inherit the ID or its absence. Generation failure leaves the scope without an ID. Only LogThis events are enriched.</remarks>
+        /// <value><see langword="true"/> by default.</value>
+        bool LogCorrelationId { get; set; }
+
         /// <summary>Whether to include serialized method arguments.</summary>
         /// <value><see langword="true"/> to add arguments to entry and exception events.</value>
         bool LogMethodArguments { get; set; }
+
+        /// <summary>Includes numeric DurationMs on enabled exit and exception events.</summary>
+        /// <remarks>Measures elapsed time, including asynchronous waits and child calls, excluding entry and completion logging.</remarks>
+        /// <value><see langword="false"/> by default.</value>
+        bool LogMethodDuration { get; set; }
 
         /// <summary>Whether to include the method name.</summary>
         /// <value><see langword="true"/> to add a method-name component.</value>
@@ -35,6 +49,13 @@
         bool LogMethodReturnValue { get; set; }
 
         /// <summary>Custom properties added to every log event.</summary>
+        /// <remarks>
+        /// Names are validated at configuration resolution and copied when the scope factory is created.
+        /// Later dictionary edits no longer affect that factory's events; referenced values are not cloned.
+        /// Reserved names (case-insensitive, with or without braces) are LogThisOnEntry, LogThisOnExit,
+        /// LogThisOnException, LogThisClass, LogThisMethod, LogThisArguments, LogThisReturnValue,
+        /// LogThisDurationMs, and LogThisCorrelationId, even when the corresponding feature is disabled.
+        /// </remarks>
         /// <value>Message-template placeholders mapped to their values.</value>
         Dictionary<string, object> MessageComponents { get; }
 

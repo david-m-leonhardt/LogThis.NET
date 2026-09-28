@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 var sink = new RecordingLogger();
 var services = new ServiceCollection();
 services.AddLogging(builder => builder.AddProvider(sink));
-services.AddLogThisConfiguration();
+services.AddLogThisConfiguration(options => options.LogCorrelationId = false);
 using var provider = services.BuildServiceProvider();
 using var scope = provider.UseLogThis();
 var sample = new Sample(sink);
@@ -19,9 +19,9 @@ void Expect(params string[] messages)
 }
 
 if (sample.Excluded() != 42) throw new Exception("Return value changed.");
-Expect("explicit", "Entered | Included", "Exited | Included");
+Expect("explicit", "Entered | Method: Included", "Exited | Method: Included");
 if (await sample.ExcludedAsync() != 43) throw new Exception("Async return value changed.");
-Expect("async explicit", "Entered | Included", "Exited | Included");
+Expect("async explicit", "Entered | Method: Included", "Exited | Method: Included");
 sample.Both();
 Expect("both explicit");
 new MethodOnly(sink).Both();
@@ -29,7 +29,7 @@ Expect("method explicit");
 new MethodOnly(sink).NoOp();
 Expect("no-op explicit");
 sample.Excluded(1);
-Expect("Entered | Excluded", "Exited | Excluded");
+Expect("Entered | Method: Excluded", "Exited | Method: Excluded");
 var failure = new InvalidOperationException("original");
 try { sample.Fail(failure); throw new Exception("Exception was swallowed."); }
 catch (InvalidOperationException caught) when (ReferenceEquals(caught, failure)) { }
@@ -39,6 +39,10 @@ catch (InvalidOperationException caught) when (ReferenceEquals(caught, failure))
 Expect("async failure explicit");
 await DataExclusionChecks.RunAsync();
 await NamedArgumentChecks.RunAsync();
+await DurationChecks.RunAsync();
+scope.Dispose();
+await CorrelationChecks.RunAsync();
+ComponentChecks.Run();
 Console.WriteLine("All opt-out integration checks passed.");
 
 [LogThis]

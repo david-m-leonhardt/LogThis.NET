@@ -62,25 +62,27 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
     /// <returns>The original method's result after it completes, if any.</returns>
     public override async Task<dynamic?> OverrideAsyncMethod()
     {
-        List<KeyValuePair<string, object?>> arguments = new();
+        List<KeyValuePair<string, object?>> arguments = [];
         CaptureArguments(arguments);
         LogThisMethodContext context = LogThisMethodContext.FromNamedArguments(
             meta.Target.Method.Name,
             meta.Target.Method.DeclaringType.Name,
-            arguments.ToArray());
+            [.. arguments]);
 
-        global::LogThis.Entities.LogThisRuntimeLogger.Entry(context);
+        LogThisRuntimeLogger.Entry(context);
+
+        long? durationStart = LogThisRuntimeLogger.StartDuration();
 
         try
         {
             // Await so exit and exception events reflect the eventual outcome.
             dynamic? result = await meta.ProceedAsync();
-            global::LogThis.Entities.LogThisRuntimeLogger.Exit(context, result);
+            LogThisRuntimeLogger.Exit(context, result, LogThisRuntimeLogger.FinishDuration(durationStart));
             return result;
         }
         catch (Exception exception)
         {
-            global::LogThis.Entities.LogThisRuntimeLogger.Exception(context, exception);
+            LogThisRuntimeLogger.Exception(context, exception, LogThisRuntimeLogger.FinishDuration(durationStart));
             throw;
         }
     }
@@ -89,24 +91,26 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
     /// <returns>The original method's result, if any.</returns>
     public override dynamic? OverrideMethod()
     {
-        List<KeyValuePair<string, object?>> arguments = new();
+        List<KeyValuePair<string, object?>> arguments = [];
         CaptureArguments(arguments);
         LogThisMethodContext context = LogThisMethodContext.FromNamedArguments(
             meta.Target.Method.Name,
             meta.Target.Method.DeclaringType.Name,
-            arguments.ToArray());
+            [.. arguments]);
 
-        global::LogThis.Entities.LogThisRuntimeLogger.Entry(context);
+        LogThisRuntimeLogger.Entry(context);
+
+        long? durationStart = LogThisRuntimeLogger.StartDuration();
 
         try
         {
             dynamic? result = meta.Proceed();
-            global::LogThis.Entities.LogThisRuntimeLogger.Exit(context, result);
+            LogThisRuntimeLogger.Exit(context, result, LogThisRuntimeLogger.FinishDuration(durationStart));
             return result;
         }
         catch (Exception exception)
         {
-            global::LogThis.Entities.LogThisRuntimeLogger.Exception(context, exception);
+            LogThisRuntimeLogger.Exception(context, exception, LogThisRuntimeLogger.FinishDuration(durationStart));
             throw;
         }
     }

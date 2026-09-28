@@ -19,30 +19,30 @@ public static class NamedArgumentChecks
         var sample = new NamedSample();
 
         sample.Authenticate("alice", "password value", true);
-        Expect(sink, "Entered | Authenticate | Arguments: {\"username\":\"alice\",\"rememberMe\":true}", "Exited | Authenticate");
+        Expect(sink, "Entered | Method: Authenticate | Arguments: {\"username\":\"alice\",\"rememberMe\":true}", "Exited | Method: Authenticate");
         sample.Alignment("first secret", "z-value", "middle secret", null, "a-value", "last secret");
-        Expect(sink, "Entered | Alignment | Arguments: {\"zebra\":\"z-value\",\"nullable\":null,\"alpha\":\"a-value\"}", "Exited | Alignment");
+        Expect(sink, "Entered | Method: Alignment | Arguments: {\"zebra\":\"z-value\",\"nullable\":null,\"alpha\":\"a-value\"}", "Exited | Method: Alignment");
         sample.Empty();
-        Expect(sink, "Entered | Empty | Arguments: {}", "Exited | Empty");
+        Expect(sink, "Entered | Method: Empty | Arguments: {}", "Exited | Method: Empty");
 
         var payload = new CapturePayload();
         sample.Nested(new[] { payload });
-        Expect(sink, "Entered | Nested | Arguments: {\"items\":[{\"Visible\":\"included\",\"Masked\":\"*****\"}]}", "Exited | Nested");
+        Expect(sink, "Entered | Method: Nested | Arguments: {\"items\":[{\"Visible\":\"included\",\"Masked\":\"*****\"}]}", "Exited | Method: Nested");
         if (payload.SecretReads != 0 || payload.StoredSecret != "excluded property value")
             throw new Exception("Property exclusion invoked a getter or mutated the payload.");
         // Parameter names do not extend JsonFieldsToMask, which still applies inside values.
         sample.MaskingScope("unchanged scalar");
-        Expect(sink, "Entered | MaskingScope | Arguments: {\"Masked\":\"unchanged scalar\"}", "Exited | MaskingScope");
+        Expect(sink, "Entered | Method: MaskingScope | Arguments: {\"Masked\":\"unchanged scalar\"}", "Exited | Method: MaskingScope");
 
         var failure = new InvalidOperationException("original");
         try { await sample.FailAsync("alice", "password", false, failure); }
         catch (InvalidOperationException caught) when (ReferenceEquals(caught, failure)) { }
-        Expect(sink, "Entered | FailAsync | Arguments: {\"username\":\"alice\",\"rememberMe\":false}", "Exception | FailAsync | Arguments: {\"username\":\"alice\",\"rememberMe\":false}");
+        Expect(sink, "Entered | Method: FailAsync | Arguments: {\"username\":\"alice\",\"rememberMe\":false}", "Exception | Method: FailAsync | Arguments: {\"username\":\"alice\",\"rememberMe\":false}");
 
         var legacy = new LogThisMethodContext("Legacy", "Manual", ["legacy", 3]);
         LogThisRuntimeLogger.Entry(legacy);
         LogThisRuntimeLogger.Exception(legacy, failure);
-        Expect(sink, "Entered | Legacy | Arguments: [\"legacy\", 3]", "Exception | Legacy | Arguments: [\"legacy\", 3]");
+        Expect(sink, "Entered | Method: Legacy | Arguments: [\"legacy\", 3]", "Exception | Method: Legacy | Arguments: [\"legacy\", 3]");
         if (legacy.NamedArguments != null || legacy.Arguments.Length != 2)
             throw new Exception("Legacy context API changed.");
         var named = LogThisMethodContext.FromNamedArguments("Named", "Manual", [new("answer", 42)]);
@@ -53,7 +53,7 @@ public static class NamedArgumentChecks
         var unread = new ThrowingCapture();
         try { sample.FailWithValue(unread, failure); }
         catch (InvalidOperationException caught) when (ReferenceEquals(caught, failure)) { }
-        Expect(sink, "Entered | FailWithValue", "Exception | FailWithValue");
+        Expect(sink, "Entered | Method: FailWithValue", "Exception | Method: FailWithValue");
         if (unread.Reads != 0) throw new Exception("Disabled argument capture serialized a value.");
     }
 

@@ -25,9 +25,23 @@ namespace LogThis.Entities
         /// <value><see langword="false"/> by default.</value>
         public bool LogClassName { get; set; } = false;
 
+        /// <summary>Includes friendly component labels in message templates without changing structured values.</summary>
+        /// <value><see langword="true"/> by default.</value>
+        public bool LogComponentLabels { get; set; } = true;
+
+        /// <summary>Creates a correlation ID when the outermost LogThis scope starts.</summary>
+        /// <remarks>The ID has 16 case-sensitive alphanumeric characters and flows across awaits. Nested scopes inherit the ID or its absence. Generation failure leaves the scope without an ID. Only LogThis events are enriched.</remarks>
+        /// <value><see langword="true"/> by default.</value>
+        public bool LogCorrelationId { get; set; } = true;
+
         /// <summary>Includes serialized arguments on entry and exception events.</summary>
         /// <value><see langword="false"/> by default.</value>
         public bool LogMethodArguments { get; set; } = false;
+
+        /// <summary>Includes numeric DurationMs on enabled exit and exception events.</summary>
+        /// <remarks>Measures elapsed time, including asynchronous waits and child calls, excluding entry and completion logging.</remarks>
+        /// <value><see langword="false"/> by default.</value>
+        public bool LogMethodDuration { get; set; } = false;
 
         /// <summary>Includes the method name in each event.</summary>
         /// <value><see langword="true"/> by default.</value>
@@ -38,6 +52,13 @@ namespace LogThis.Entities
         public bool LogMethodReturnValue { get; set; }
 
         /// <summary>Additional structured properties included with every event.</summary>
+        /// <remarks>
+        /// Names are validated at configuration resolution and copied when the scope factory is created.
+        /// Later dictionary edits no longer affect that factory's events; referenced values are not cloned.
+        /// Reserved names (case-insensitive, with or without braces) are LogThisOnEntry, LogThisOnExit,
+        /// LogThisOnException, LogThisClass, LogThisMethod, LogThisArguments, LogThisReturnValue,
+        /// LogThisDurationMs, and LogThisCorrelationId, even when the corresponding feature is disabled.
+        /// </remarks>
         /// <value>An initially empty dictionary whose keys are message-template placeholders.</value>
         public Dictionary<string, object> MessageComponents { get; } = [];
 
@@ -64,7 +85,7 @@ namespace LogThis.Entities
         /// <summary>Adds custom structured properties, wrapping names as message-template placeholders.</summary>
         /// <param name="messageComponents">Property names and values to add to every event.</param>
         /// <remarks>Keys are normalized before insertion into <see cref="MessageComponents"/>.</remarks>
-        /// <exception cref="ArgumentException">A normalized property name is already present.</exception>
+        /// <exception cref="ArgumentException">A name is reserved, malformed, or already present after normalization.</exception>
         public void AddMessageComponents(Dictionary<string, object> messageComponents)
         {
             foreach (KeyValuePair<string, object> component in messageComponents)

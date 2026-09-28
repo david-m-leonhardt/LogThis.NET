@@ -23,6 +23,7 @@ namespace LogThis.Middleware
             /// <summary>Registers LogThis using defaults, optional DI-provided settings, and optional code overrides.</summary>
             /// <remarks>Register <see cref="IConfiguration"/> before building the service provider to bind its <c>LogThis</c> section. The callback runs after binding when the configuration is first resolved. Unknown keys in a present section cause an error.</remarks>
             /// <param name="configure">Optional changes to make after configuration binding.</param>
+            /// <exception cref="ArgumentException">A custom component has a reserved or malformed name when configuration is resolved.</exception>
             public void AddLogThisConfiguration(Action<LogThisConfiguration>? configure = null)
             {
                 RegisterConfiguration(services, provider =>
@@ -50,6 +51,8 @@ namespace LogThis.Middleware
 
             /// <summary>Registers one configuration and the scope factory for dependency injection.</summary>
             /// <param name="logThisConfiguration">Configuration instance shared by all registered scopes.</param>
+            /// <remarks>Custom names are validated on first resolution and copied when the scope factory is created; later dictionary edits do not change its events.</remarks>
+            /// <exception cref="ArgumentException">A custom component has a reserved or malformed name when configuration is resolved.</exception>
             public void AddLogThisConfiguration(ILogThisConfiguration logThisConfiguration)
             {
                 ArgumentNullException.ThrowIfNull(logThisConfiguration);
@@ -97,7 +100,13 @@ namespace LogThis.Middleware
             IServiceCollection services,
             Func<IServiceProvider, ILogThisConfiguration> factory)
         {
-            services.AddSingleton(factory);
+            services.AddSingleton<ILogThisConfiguration>(provider =>
+            {
+                ILogThisConfiguration configuration = factory(provider);
+                // Validate every registration path when options are first resolved.
+                LogParameters.PrepareComponents(configuration.MessageComponents);
+                return configuration;
+            });
             services.AddSingleton<ILogThisScopeFactory, LogThisScopeFactory>();
         }
 

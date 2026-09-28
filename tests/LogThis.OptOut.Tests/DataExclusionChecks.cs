@@ -22,21 +22,21 @@ public static class DataExclusionChecks
         var secret = new ThrowingCapture();
 
         Check(sample.Mixed("visible", secret, 7) == 7, "Parameter exclusion changed the result.");
-        Expect(sink, "Entered | Mixed | Arguments: {\"visible\":\"visible\",\"number\":7}", "Exited | Mixed | ReturnValue: 7");
+        Expect(sink, "Entered | Method: Mixed | Arguments: {\"visible\":\"visible\",\"number\":7}", "Exited | Method: Mixed | Return value: 7");
         sample.AllExcluded(secret);
-        Expect(sink, "Entered | AllExcluded | Arguments: {}", "Exited | AllExcluded | ReturnValue: null");
+        Expect(sink, "Entered | Method: AllExcluded | Arguments: {}", "Exited | Method: AllExcluded | Return value: null");
         Check(await sample.Async("visible", secret) == 8, "Async result changed.");
-        Expect(sink, "Entered | Async | Arguments: {\"visible\":\"visible\"}", "Exited | Async | ReturnValue: 8");
+        Expect(sink, "Entered | Method: Async | Arguments: {\"visible\":\"visible\"}", "Exited | Method: Async | Return value: 8");
         Check(await sample.ValueTask(secret) == 9, "ValueTask result changed.");
-        Expect(sink, "Entered | ValueTask | Arguments: {}", "Exited | ValueTask | ReturnValue: 9");
+        Expect(sink, "Entered | Method: ValueTask | Arguments: {}", "Exited | Method: ValueTask | Return value: 9");
         sample.Generic(secret, "generic");
-        Expect(sink, "Entered | Generic | Arguments: {\"visible\":\"generic\"}", "Exited | Generic | ReturnValue: null");
+        Expect(sink, "Entered | Method: Generic | Arguments: {\"visible\":\"generic\"}", "Exited | Method: Generic | Return value: null");
         Check(secret.Reads == 0, "Excluded parameter was serialized.");
         new DirectDataSample().Capture("direct", secret);
-        Expect(sink, "Entered | Capture | Arguments: {\"visible\":\"direct\"}", "Exited | Capture | ReturnValue: null");
+        Expect(sink, "Entered | Method: Capture | Arguments: {\"visible\":\"direct\"}", "Exited | Method: Capture | Return value: null");
         object refSecret = secret;
         sample.ByReference(ref refSecret, out object outSecret);
-        Expect(sink, "Entered | ByReference | Arguments: {}", "Exited | ByReference | ReturnValue: null");
+        Expect(sink, "Entered | Method: ByReference | Arguments: {}", "Exited | Method: ByReference | Return value: null");
         Check(ReferenceEquals(refSecret, secret) && ReferenceEquals(outSecret, secret), "Reference parameter behavior changed.");
 
         var payload = new CapturePayload();
@@ -62,45 +62,45 @@ public static class DataExclusionChecks
 
         // An excluded parameter can still be returned or passed to a separately instrumented method.
         Check(ReferenceEquals(sample.ReturnExcluded(payload), payload), "Excluded input changed the return value.");
-        Check(sink.Messages[0] == "Entered | ReturnExcluded | Arguments: {}", "Excluded input captured.");
+        Check(sink.Messages[0] == "Entered | Method: ReturnExcluded | Arguments: {}", "Excluded input captured.");
         Check(sink.Messages[1].Contains("\"Visible\":\"included\"") && !sink.Messages[1].Contains("Secret"), "Return capture did not independently honor property exclusion.");
         sink.Messages.Clear();
         sample.ForwardExcluded(payload);
-        Check(sink.Messages.Count == 4 && sink.Messages[1].StartsWith("Entered | RoundTrip | Arguments: {"), "Called method was suppressed.");
+        Check(sink.Messages.Count == 4 && sink.Messages[1].StartsWith("Entered | Method: RoundTrip | Arguments: {"), "Called method was suppressed.");
         Check(sink.Messages[1].Contains("\"Visible\":\"included\"") && !sink.Messages[1].Contains("Secret"), "Called method capture was incorrect.");
         sink.Messages.Clear();
 
         var failure = new InvalidOperationException("exception text remains unchanged");
         try { sample.Fail("visible", secret, failure); throw new Exception("Exception swallowed."); }
         catch (InvalidOperationException caught) when (ReferenceEquals(caught, failure)) { }
-        Expect(sink, "Entered | Fail | Arguments: {\"visible\":\"visible\"}", "Exception | Fail | Arguments: {\"visible\":\"visible\"} | ReturnValue: ");
+        Expect(sink, "Entered | Method: Fail | Arguments: {\"visible\":\"visible\"}", "Exception | Method: Fail | Arguments: {\"visible\":\"visible\"} | Return value: ");
         try { await sample.FailAsync("visible", secret, failure); throw new Exception("Async exception swallowed."); }
         catch (InvalidOperationException caught) when (ReferenceEquals(caught, failure)) { }
-        Expect(sink, "Entered | FailAsync | Arguments: {\"visible\":\"visible\"}", "Exception | FailAsync | Arguments: {\"visible\":\"visible\"} | ReturnValue: ");
+        Expect(sink, "Entered | Method: FailAsync | Arguments: {\"visible\":\"visible\"}", "Exception | Method: FailAsync | Arguments: {\"visible\":\"visible\"} | Return value: ");
         Check(failure.Message == "exception text remains unchanged", "Exception text changed.");
         try { sample.FailWithPayload(payload, failure); throw new Exception("Exception swallowed."); }
         catch (InvalidOperationException caught) when (ReferenceEquals(caught, failure)) { }
-        Check(sink.Messages.Count == 2 && sink.Messages[1].StartsWith("Exception | FailWithPayload | Arguments:"), "Exception event missing.");
+        Check(sink.Messages.Count == 2 && sink.Messages[1].StartsWith("Exception | Method: FailWithPayload | Arguments:"), "Exception event missing.");
         Check(sink.Messages.All(message => message.Contains("\"Visible\":\"included\"") && !message.Contains("renamed-secret")), "Exception argument property exclusion failed.");
         sink.Messages.Clear();
 
         options.LogMethodArguments = false;
         sample.RoundTrip(payload);
-        Check(sink.Messages.Count == 2 && sink.Messages[0] == "Entered | RoundTrip" && sink.Messages[1].Contains("\"Visible\":\"included\"") && !sink.Messages[1].Contains("renamed-secret"), "Return-only capture failed.");
+        Check(sink.Messages.Count == 2 && sink.Messages[0] == "Entered | Method: RoundTrip" && sink.Messages[1].Contains("\"Visible\":\"included\"") && !sink.Messages[1].Contains("renamed-secret"), "Return-only capture failed.");
         sink.Messages.Clear();
         options.LogMethodArguments = true;
         options.LogMethodReturnValue = false;
         sample.RoundTrip(payload);
-        Check(sink.Messages.Count == 2 && sink.Messages[0].Contains("\"Visible\":\"included\"") && !sink.Messages[0].Contains("renamed-secret") && sink.Messages[1] == "Exited | RoundTrip", "Argument-only capture failed.");
+        Check(sink.Messages.Count == 2 && sink.Messages[0].Contains("\"Visible\":\"included\"") && !sink.Messages[0].Contains("renamed-secret") && sink.Messages[1] == "Exited | Method: RoundTrip", "Argument-only capture failed.");
         sink.Messages.Clear();
 
         // Runtime configuration remains independent of declarations and can change after weaving.
         options.LogMethodArguments = false;
         options.LogMethodReturnValue = false;
         Check(ReferenceEquals(sample.RoundTrip(secret), secret), "Disabled capture changed the result.");
-        Expect(sink, "Entered | RoundTrip", "Exited | RoundTrip");
+        Expect(sink, "Entered | Method: RoundTrip", "Exited | Method: RoundTrip");
         sample.AllExcluded(secret);
-        Expect(sink, "Entered | AllExcluded", "Exited | AllExcluded");
+        Expect(sink, "Entered | Method: AllExcluded", "Exited | Method: AllExcluded");
         Check(secret.Reads == 0, "Disabled capture invoked a getter.");
 
         options.LogMethodArguments = true;
@@ -112,7 +112,7 @@ public static class DataExclusionChecks
         Check(secret.Reads == 0, "Disabled events invoked a getter.");
         try { sample.Fail("visible", secret, failure); throw new Exception("Exception swallowed."); }
         catch (InvalidOperationException caught) when (ReferenceEquals(caught, failure)) { }
-        Expect(sink, "Exception | Fail | Arguments: {\"visible\":\"visible\"} | ReturnValue: ");
+        Expect(sink, "Exception | Method: Fail | Arguments: {\"visible\":\"visible\"} | Return value: ");
         options.OnExceptionConfig.LogAccessPoint = false;
         try { sample.Fail("visible", secret, failure); throw new Exception("Exception swallowed."); }
         catch (InvalidOperationException caught) when (ReferenceEquals(caught, failure)) { }
@@ -120,7 +120,7 @@ public static class DataExclusionChecks
         options.OnEntryConfig.LogAccessPoint = true;
         options.OnExitConfig.LogAccessPoint = true;
         sample.Explicit("explicit secret");
-        Expect(sink, "Entered | Explicit | Arguments: {}", "explicit secret", "Exited | Explicit | ReturnValue: null");
+        Expect(sink, "Entered | Method: Explicit | Arguments: {}", "explicit secret", "Exited | Method: Explicit | Return value: null");
         Check(payload.SecretReads == 0 && secret.Reads == 0, "Excluded getter ran during a later capture.");
     }
 

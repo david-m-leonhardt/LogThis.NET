@@ -1,49 +1,50 @@
+using LogThis.Constants;
+
 namespace LogThis.Extensions
 {
     /// <summary>Helpers for message-template component names.</summary>
     public static class StringExtensions
     {
-        #region Extension Block
-        // String extension members support custom message components.
-        extension(string source)
-        {
-            /// <summary>Wraps a custom component name in braces for a logging template.</summary>
-            /// <returns>The receiver formatted as a message-template placeholder.</returns>
-            public string PrepComponentName()
+        #region Private Fields
+
+        // Use the same placeholders as the runtime rather than reserving the entire LogThis prefix.
+        private static readonly HashSet<string> ReservedNames = new(
+            new[]
             {
-                if (source.Contains('{') && source[0] != '{')
-                {
-                    source = ReplaceEscapedBracket(source, "{");
-                }
-                if (source.Contains('}') && source[^1] != '}')
-                {
-                    source = ReplaceEscapedBracket(source, "}");
-                }
-
-                if (!source.StartsWith('{'))
-                {
-                    source = "{" + source;
-                }
-                if (!source.EndsWith('}'))
-                {
-                    source += "}";
-                }
-
-                return source;
-            }
-        }
+                MessageComponentConstants.OnEntryLabel, MessageComponentConstants.OnExitLabel,
+                MessageComponentConstants.OnExceptionLabel, MessageComponentConstants.ClassLabel,
+                MessageComponentConstants.MethodNameLabel, MessageComponentConstants.ArgumentsLabel,
+                MessageComponentConstants.ReturnValueLabel, MessageComponentConstants.DurationMsLabel,
+                MessageComponentConstants.CorrelationIdLabel
+            }.Select(placeholder => placeholder[1..^1]), StringComparer.OrdinalIgnoreCase);
 
         #endregion
 
-        #region Private Method
+        #region Extension Block
 
-        /// <summary>Escapes a brace embedded in a custom component name.</summary>
-        /// <param name="name">Component name to inspect.</param>
-        /// <param name="str">Brace character to escape.</param>
-        /// <returns>The component name with the selected brace escaped.</returns>
-        private static string ReplaceEscapedBracket(string name, string str)
+        extension(string source)
         {
-            return name.Replace(str, $"\\\\{str}");
+            /// <summary>Validates and wraps a custom name as one message-template placeholder.</summary>
+            /// <returns>The normalized placeholder.</returns>
+            /// <exception cref="ArgumentException">The name is malformed or reserved by LogThis.</exception>
+            public string PrepComponentName()
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(source);
+                string name = source.Trim();
+                if (name.StartsWith('{') && name.EndsWith('}')) name = name[1..^1];
+                if (string.IsNullOrWhiteSpace(name) || name.Contains('{') || name.Contains('}'))
+                    throw new ArgumentException($"Message component '{source}' must be a bare name or a single brace-wrapped placeholder. Choose another name.");
+
+                // Alignment/format suffixes and provider hints cannot bypass reservations.
+                int suffix = name.IndexOfAny([',', ':']);
+                string propertyName = (suffix < 0 ? name : name[..suffix]).Trim().TrimStart('@', '$').Trim();
+                if (propertyName.Length == 0)
+                    throw new ArgumentException($"Message component '{source}' has no property name. Choose another name.");
+                if (ReservedNames.Contains(propertyName))
+                    throw new ArgumentException($"Message component '{source}' conflicts with reserved LogThis property '{propertyName}'. Choose another name.");
+
+                return "{" + name + "}";
+            }
         }
 
         #endregion

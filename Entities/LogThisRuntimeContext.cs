@@ -6,9 +6,13 @@ namespace LogThis.Entities;
 /// <summary>The logger and configuration selected for one active logging scope.</summary>
 /// <param name="Logger">Logger created for the scope's category.</param>
 /// <param name="Configuration">Options shared by events in the scope.</param>
+/// <param name="CorrelationId">Outermost scope's ID, or null when disabled or generation failed.</param>
+/// <param name="MessageComponents">Validated custom fields captured when the scope factory was created.</param>
 internal sealed record LogThisRuntime(
     ILogger Logger,
-    ILogThisConfiguration Configuration);
+    ILogThisConfiguration Configuration,
+    string? CorrelationId,
+    Dictionary<string, object> MessageComponents);
 
 /// <summary>Flows the current runtime through asynchronous execution without global reinitialization.</summary>
 internal static class LogThisRuntimeContext

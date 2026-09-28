@@ -14,6 +14,21 @@
 
         #endregion
 
+        #region Internal Methods
+
+        /// <summary>Normalizes and validates a detached copy of custom components before logging starts.</summary>
+        /// <param name="components">Configured custom names and values.</param>
+        /// <returns>A snapshot safe from subsequent dictionary edits.</returns>
+        internal static Dictionary<string, object> PrepareComponents(Dictionary<string, object> components)
+        {
+            Dictionary<string, object> prepared = [];
+            foreach (KeyValuePair<string, object> component in components)
+                prepared.Add(LogThis.Extensions.StringExtensions.PrepComponentName(component.Key), component.Value);
+            return prepared;
+        }
+
+        #endregion
+
         #region Public Properties
 
         /// <summary>Gets a snapshot of values for the structured logging placeholders.</summary>
