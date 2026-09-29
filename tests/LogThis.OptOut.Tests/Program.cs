@@ -43,6 +43,7 @@ await DurationChecks.RunAsync();
 scope.Dispose();
 await CorrelationChecks.RunAsync();
 ComponentChecks.Run();
+await MaskingChecks.RunAsync();
 Console.WriteLine("All opt-out integration checks passed.");
 
 [LogThis]

@@ -10,10 +10,12 @@
         bool DebugLogThis { get; set; }
 
         /// <summary>Case-insensitive JSON property names to redact at any depth in logged values.</summary>
+        /// <remarks>Ordinary property matches skip getters and emit a whole-value replacement even for nulls. Explicit MaskThisInLogs replacements take precedence; DontLogThis omits properties. Dictionary/JSON masking retains a post-serialization fallback.</remarks>
         /// <value>The field names supplied by the application.</value>
         List<string> JsonFieldsToMask { get; set; }
 
         /// <summary>Replacement text used for masked JSON fields.</summary>
+        /// <remarks>Also used by MaskThisInLogs without an explicit replacement. Applies per capture without mutating application values.</remarks>
         /// <value>The text substituted for each matched field value.</value>
         string JsonMaskValue { get; set; }
 

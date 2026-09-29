@@ -6,17 +6,6 @@ namespace LogThis.Entities;
 /// <summary>Serializes logged values and masks configured property names throughout the JSON tree.</summary>
 internal static class LogThisValueMasker
 {
-    #region Private Properties
-
-    // Omit null members before masking to match the library's logged JSON representation.
-    private static readonly JsonSerializerSettings SerializerSettings = new()
-    {
-        NullValueHandling = NullValueHandling.Ignore,
-        ContractResolver = new LogThisContractResolver()
-    };
-
-    #endregion
-
     #region Internal Methods
 
     /// <summary>Serializes one value and masks matching properties at any depth.</summary>
@@ -68,11 +57,18 @@ internal static class LogThisValueMasker
     {
         LogThisRuntime runtime = LogThisRuntimeContext.Current
             ?? throw new InvalidOperationException("No LogThis scope is active.");
+        HashSet<string> names = new(runtime.Configuration.JsonFieldsToMask, StringComparer.OrdinalIgnoreCase);
+        string mask = runtime.Configuration.JsonMaskValue;
+        // Contracts contain capture-specific masks; never share them across scopes or configurations.
+        LogThisContractResolver resolver = new(names, mask);
         JToken token = value == null
             ? JValue.CreateNull()
-            : JToken.FromObject(value, JsonSerializer.Create(SerializerSettings));
-        HashSet<string> names = new(runtime.Configuration.JsonFieldsToMask, StringComparer.OrdinalIgnoreCase);
-        MaskToken(token, names, runtime.Configuration.JsonMaskValue);
+            : JToken.FromObject(value, JsonSerializer.Create(new JsonSerializerSettings
+            {
+                NullValueHandling = NullValueHandling.Ignore,
+                ContractResolver = resolver
+            }));
+        MaskToken(token, names, mask, resolver);
         return token;
     }
 
@@ -80,19 +76,21 @@ internal static class LogThisValueMasker
     /// <param name="token">Current JSON node to inspect.</param>
     /// <param name="names">Property names to mask, compared without case sensitivity.</param>
     /// <param name="mask">Replacement text for a matched value.</param>
-    private static void MaskToken(JToken token, HashSet<string> names, string mask)
+    /// <param name="resolver">Identifies replacements already supplied by property contracts.</param>
+    private static void MaskToken(JToken token, HashSet<string> names, string mask, LogThisContractResolver resolver)
     {
         if (token is JObject obj)
         {
             foreach (JProperty property in obj.Properties())
             {
+                if (resolver.IsReplacement(property.Value)) continue;
                 if (names.Contains(property.Name))
                 {
                     property.Value = new JValue(mask);
                 }
                 else
                 {
-                    MaskToken(property.Value, names, mask);
+                    MaskToken(property.Value, names, mask, resolver);
                 }
             }
         }
@@ -100,7 +98,7 @@ internal static class LogThisValueMasker
         {
             foreach (JToken item in array)
             {
-                MaskToken(item, names, mask);
+                MaskToken(item, names, mask, resolver);
             }
         }
     }

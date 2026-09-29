@@ -14,10 +14,12 @@ namespace LogThis.Entities
         public bool DebugLogThis { get; set; } = false;
 
         /// <summary>Case-insensitive JSON property names to redact at any depth in logged values.</summary>
+        /// <remarks>Ordinary property matches skip getters and emit a whole-value replacement even for nulls. Explicit MaskThisInLogs replacements take precedence; DontLogThis omits properties. Dictionary/JSON masking retains a post-serialization fallback.</remarks>
         /// <value>An initially empty, mutable list.</value>
         public List<string> JsonFieldsToMask { get; set; } = [];
 
         /// <summary>Replacement text for each masked JSON field.</summary>
+        /// <remarks>Also used by MaskThisInLogs without an explicit replacement. Applies per capture without mutating application values.</remarks>
         /// <value><c>*****</c> by default.</value>
         public string JsonMaskValue { get; set; } = MessageComponentConstants.DefaultJsonMaskValue;
 

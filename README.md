@@ -223,7 +223,15 @@ The same operation is available by resolving `ILogThisScopeFactory` and calling
 background service's `ExecuteAsync` method. Marked methods called without an
 active scope do not produce LogThis events.
 
-## Applying `[LogThis]`
+## Attributes
+
+LogThis.NET provides three attributes with distinct purposes:
+
+- `[LogThis]` enables method-boundary logging.
+- `[DontLogThis]` excludes a method or captured value.
+- `[MaskThisInLogs]` replaces a captured property value with safe text.
+
+### `[LogThis]`
 
 Apply the attribute to one method or to a class. A class-level attribute wraps
 each public, non-abstract method:
@@ -244,7 +252,8 @@ public class OrdersService
 Awaitable methods log their exit after completion and log exceptions thrown
 during the await.
 
-The default events are:
+Each access point is enabled by default with the following level and
+`AccessPointMessage`:
 
 | Event | Level | Message |
 | --- | --- | --- |
@@ -252,13 +261,32 @@ The default events are:
 | Exit | `Information` | `Exited` |
 | Exception | `Error` | `Exception` |
 
+`Entered`, `Exited`, and `Exception` are defaults, not fixed labels. Change
+them independently through `OnEntryConfig.AccessPointMessage`,
+`OnExitConfig.AccessPointMessage`, and
+`OnExceptionConfig.AccessPointMessage`.
+
 The method name is included by default, and message components are separated by
-` | `. Class names, arguments, return values, and custom properties are omitted
-until enabled.
+` | `. Class names, arguments, return values, duration, and custom properties
+are omitted until enabled. Correlation IDs and readable component labels are
+enabled by default.
 
-### Excluding a method with `[DontLogThis]`
+### `[DontLogThis]`
 
-Use `[DontLogThis]` to prevent LogThis from intercepting a particular method:
+`[DontLogThis]` opts specific methods or data out of LogThis without changing
+application behavior. Apply it to:
+
+- a method to suppress that method's entry, exit, and exception events
+- a parameter to omit it from captured arguments
+- a property to omit it whenever its containing object is captured
+
+Exclusion means omission. It does not replace a value with masking text, disable
+logging in called methods, or affect explicit application `ILogger` calls.
+
+#### Excluding a method
+
+Use `[DontLogThis]` on a method that would otherwise be included by a
+class-level or method-level `[LogThis]`:
 
 ```csharp
 [LogThis]
@@ -275,20 +303,18 @@ public class OrderService(ILogger<OrderService> logger)
 }
 ```
 
-LogThis generates no entry, exit, or exception events for `SubmitOrder`.
-Explicit `ILogger` calls are unaffected by either attribute and retain their
-normal provider and log-level filtering. Called methods such as `ValidateOrder`
-follow their own instrumentation rules; no ambient logging state is disabled.
-Return values and exception propagation are unchanged, including for async methods.
-An instrumented caller can still log its own failure when an excluded method throws.
+LogThis emits no events for `SubmitOrder`, but the explicit log statement still
+runs and `ValidateOrder` follows its own instrumentation rules. Return values,
+async behavior, and exception propagation are unchanged. If an instrumented
+caller observes an exception from an excluded method, that caller can still log
+its own exception event.
 
-The exclusion takes precedence even when `[LogThis]` is also applied directly to
-the method. It is harmless on a method that would not otherwise be instrumented.
-It applies only to the annotated method: annotate other overloads, overrides,
-or interface implementations separately. Class and constructor exclusions are
-not supported.
+A method exclusion takes precedence over `[LogThis]` on the same method and
+applies only to that method. Annotate overloads, overrides, and interface
+implementations separately. Classes and constructors cannot be marked with
+`[DontLogThis]`.
 
-### Excluding parameters and properties
+#### Excluding parameters and properties
 
 The same `[DontLogThis]` attribute can omit a parameter from argument capture
 or a property from object capture:
@@ -315,34 +341,20 @@ public class CheckoutService
 }
 ```
 
-With `LogMethodArguments` enabled, `apiKey` is omitted entirely, with no name,
-value, or masking placeholder. Included arguments are logged as a JSON object
-of parameter names and values in declaration order. If all parameters are
-excluded, arguments are logged as `{}` and configured events still occur.
+With argument logging enabled, `apiKey` is absent from the argument JSON. If
+every parameter is excluded, the component contains `{}`. `PaymentToken` is
+omitted from any captured `OrderRequest`, including nested objects and
+collection items.
 
-`PaymentToken` is omitted whenever LogThis captures an `OrderRequest`, including
-arguments, return values, nested objects, and objects in collections. Excluded
-properties are skipped before serialization, so logging does not invoke their
-getters. Included data retains the existing JSON serialization and masking rules;
-exclusion means omission, not replacement with `JsonMaskValue`. Application
-objects, method results, and exceptions are not modified.
+LogThis excludes ordinary properties before serialization and does not invoke
+their getters. It does not modify application objects, results, or exceptions.
+Parameter and property exclusions matter only when the corresponding argument
+or return-value capture is enabled.
 
-Exclusions are independent: an excluded parameter can still be captured as a
-return value or by a called method, with property exclusions applied in each
-capture. An excluded method does not disable property exclusions in other methods.
+`[DontLogThis]` governs LogThis capture only. It cannot remove a value that the
+application writes through its own logger or embeds in exception text.
 
-Configuration determines which entry, exit, and exception events occur and
-whether arguments or return values are captured. Exclusions only remove eligible
-methods or data; they never enable capture. Parameter and property exclusions
-have no effect when the corresponding data capture is disabled. They remain
-valid without build warnings because configuration is resolved at runtime and
-capture can be enabled later.
-
-These exclusions govern data captured by LogThis. They do **not** sanitize explicit
-application logs or exception-message text. An application can still explicitly
-log an excluded value, and an exception message can still contain that value.
-
-### Named argument output and compatibility
+#### Named argument output
 
 Parameter names come from method metadata at build time and are paired with
 their values when the method is called. For example:
@@ -368,18 +380,77 @@ parameter names themselves do not expand the property-masking rules. Use
 `[DontLogThis]` to omit a parameter. Disabling argument logging omits the entire
 argument component and avoids serialization, while configured events continue.
 
-This prerelease changes newly woven argument output from a positional array to
-a named JSON object. Update log parsers that depend on the old format and rebuild
-consumer applications to capture names. The structured `{LogThisArguments}` field still
-contains the captured JSON string without a descriptive label; it is not a new set of logger fields.
-Renaming a source parameter changes its logged JSON key after rebuilding.
+The structured `{LogThisArguments}` property contains the complete JSON string,
+not one logger property per parameter. Renaming a source parameter changes its
+JSON key after rebuilding. Existing instrumentation created with the positional
+`LogThisMethodContext(string, string, object?[])` API retains positional output;
+manual contexts that need names can use `FromNamedArguments`.
 
-The public `LogThisMethodContext(string, string, object?[])` constructor and
-`Arguments` property remain available. Existing compiled instrumentation and
-manual contexts using that constructor keep positional output because they have
-no parameter names. New instrumentation uses `FromNamedArguments` and the
-`NamedArguments` property; `Arguments` also exposes the corresponding values for
-compatibility. Use the new factory for manual contexts that need named output.
+### `[MaskThisInLogs]`
+
+Use `[MaskThisInLogs]` on a model property that may be captured but should not
+expose its value:
+
+```csharp
+public class LoginRequest
+{
+    [MaskThisInLogs]
+    public string Password { get; init; } = "";
+
+    [MaskThisInLogs("[PRIVATE]")]
+    public CustomerDetails Customer { get; init; } = new();
+}
+```
+
+Without an argument, the attribute uses the configured `JsonMaskValue`
+(`*****` by default). Passing a string uses that fixed replacement; an empty
+string is valid. The replacement covers the property's entire value, including
+objects and collections.
+
+The attribute applies to properties captured as arguments, return values,
+nested objects, or collection items. For ordinary properties, LogThis writes the
+replacement without invoking the getter. It does not modify the original object
+or sanitize explicit application logs and exception messages.
+
+`[DontLogThis]` takes precedence and omits the property. An explicit
+`[MaskThisInLogs("...")]` value takes precedence over configuration-based
+masking.
+
+## Sensitive-data masking
+
+Use `JsonFieldsToMask` for models that cannot be annotated, or to apply a
+shared rule by serialized property name:
+
+```csharp
+builder.Services.AddLogThisConfiguration(options =>
+{
+    options.JsonFieldsToMask = ["Password", "AuthToken"];
+    options.JsonMaskValue = "*****";
+    options.LogMethodArguments = true;
+    options.LogMethodReturnValue = true;
+});
+```
+
+Matching is case-insensitive and applies at any nesting depth, including objects
+inside arrays. A match replaces the property's entire value. Dotted paths,
+wildcards, and partial-value masking are not supported.
+
+Masking precedence is:
+
+1. `[DontLogThis]` omits the property.
+2. `[MaskThisInLogs("replacement")]` uses its explicit replacement.
+3. `[MaskThisInLogs]` or a configured name match uses `JsonMaskValue`.
+
+For ordinary object properties, attribute and configured-name masking occur
+without invoking the matched getter. Dictionary entries, existing JSON objects,
+and custom converters can require serialization or traversal before a
+configuration-based match is replaced. Disabled argument or return-value
+capture performs no masking work.
+
+Masking protects only LogThis-captured data. Unlisted properties remain
+unchanged, and application-authored logs or exception messages can still expose
+their values. Enable argument and return-value logging only when appropriate for
+the application's data and volume.
 
 ## Configuration
 
@@ -456,7 +527,7 @@ An application can also pass a specific `IConfigurationSection` or a prepared
 | Option | Default | Effect |
 | --- | --- | --- |
 | `LogClassName` | `false` | Adds the declaring class as `{LogThisClass}`. |
-| `LogComponentLabels` | `true` | Adds readable labels in templates without changing structured values or event selection. |
+| `LogComponentLabels` | `true` | Adds descriptive labels such as `Class:` and `Method:` to rendered components. |
 | `LogCorrelationId` | `true` | Creates an outermost-scope ID and adds `{LogThisCorrelationId}` to LogThis events. |
 | `LogMethodName` | `true` | Adds the method as `{LogThisMethod}`. |
 | `LogMethodArguments` | `false` | Adds `{LogThisArguments}` to entry and exception events. |
@@ -474,157 +545,82 @@ An application can also pass a specific `IConfigurationSection` or a prepared
 - `LogLevel` to select its severity
 - `AccessPointMessage` to change its message
 
-### Readable component labels
+### Component labels and access-point messages
 
 `LogComponentLabels` defaults to `true`. Set `options.LogComponentLabels = false`
 in the registration callback, or `"LogComponentLabels": false` in the `LogThis`
-configuration section, to omit descriptive labels. For an exit event with class
-and method enabled and correlation disabled:
+configuration section, to omit descriptive component labels. It controls labels
+such as `Class:`, `Method:`, `Arguments:`, `Return value:`, `Duration ms:`,
+and `Correlation ID:`.
+
+`LogComponentLabels` does not control the access-point message at the beginning
+of an event. Entry, exit, and exception messages remain independently
+configurable through each event's `AccessPointMessage`; `Entered`, `Exited`,
+and `Exception` are only their defaults.
+
+For an exit event with class and method enabled, correlation disabled, and the
+default exit message:
 
 ```text
 Enabled:  Exited | Class: OrderService | Method: SubmitAsync
 Disabled: Exited | OrderService | SubmitAsync
 ```
 
-Labels are `Class:`, `Method:`, `Arguments:`, `Return value:`, `Duration ms:`, and
-`Correlation ID:`. Event messages such as `Entered`, `Exited`, and `Exception`
-are unchanged. Disabling labels preserves order, delimiters, values, property
-names, and event selection. Duration stays numeric, and correlation IDs retain
-their complete value. Custom components receive no automatic descriptive label.
-Whole-event formatting, including JSON output, remains the provider's job.
-
-Labels now belong to message templates rather than captured strings.
-`LogThisArguments` contains the JSON string alone, and `LogThisReturnValue`
-contains the captured return string alone (empty on exception events).
-This changes structured values even when rendered output looks similar; update
-parsers that stripped `Arguments: ` or `ReturnValue: `. The new rendered return
-label is `Return value:`. All existing `LogThis`-prefixed property names remain
-unchanged. Custom `ILogThisConfiguration` implementations must add
-`LogComponentLabels`.
+Disabling labels preserves component order, delimiters, structured property
+names and values, and event selection. Custom components do not receive an
+automatic label. Whole-event formatting, including JSON output, remains the
+logging provider's responsibility.
 
 ### Custom component validation and lifetime
 
-These explicit library-owned property names are reserved, case-insensitively,
-even when their associated features or events are disabled:
+Custom component names must not conflict with these library-owned structured
+properties, regardless of case or whether the related feature is enabled:
 
 - `LogThisOnEntry`, `LogThisOnExit`, `LogThisOnException`
 - `LogThisClass`, `LogThisMethod`, `LogThisArguments`, `LogThisReturnValue`
 - `LogThisDurationMs`, `LogThisCorrelationId`
 
-Other names beginning with `LogThis`, such as `LogThisCustom`, are allowed.
-Unprefixed names such as `Method` and `CorrelationId` remain allowed.
-Bare names and single brace-wrapped placeholders are normalized consistently.
-Alignment/format suffixes and provider hints cannot bypass reservations:
-`{logthismethod}`, `{LogThisDurationMs:N2}`, and `{@LogThisArguments}` conflict.
-Malformed or embedded braces are rejected rather than accepted as template text.
+Other names, including names such as `LogThisCustom`, `Method`, and
+`CorrelationId`, are allowed. Bare names and single brace-wrapped placeholders
+are normalized. Reserved, duplicate, or malformed names throw an
+`ArgumentException` during addition or configuration resolution.
 
-Conflicts throw an `ArgumentException` identifying the component and asking for
-another name. `AddMessageComponents` validates immediately. Bound sections are
-validated when bound; all registration paths, including callbacks and prepared
-configuration instances, are validated when configuration is first resolved.
-
-The scope factory validates and copies custom components when it is first
-created, normally on the first `UseLogThis` call. Edits between configuration
-resolution and factory creation are checked again. After that copy, direct
-dictionary edits, indexer assignments, removals, and `AddMessageComponents` calls
-do not change events from that factory, including future scopes. Configure
-components before resolving the factory; create a new service provider to apply
-a different set. `AddMessageComponents` still rejects reserved names immediately.
-The copy is shallow: referenced custom value objects are not cloned. Other
-configuration options retain their existing behavior.
-
-This replaces live custom-dictionary updates and previously accepted reserved
-names. No conflicting field is renamed or overwritten, and validation is not
-performed on every event. Provider failures during event emission remain isolated
-from application execution.
+Configure custom components before the first LogThis scope is created. The scope
+factory takes a shallow snapshot of the dictionary, so later additions, removals,
+or replacements do not affect that service provider's events.
 
 ### Correlation IDs
 
-By default, starting an outermost LogThis scope generates a correlation ID before
-any event is emitted. Each ID is exactly 16 case-sensitive characters from
-`A–Z`, `a–z`, and `0–9`, selected uniformly using .NET cryptographic randomness.
-Random IDs offer collision resistance, not guaranteed uniqueness. Preserve case
-when storing and comparing them.
-
-Every emitted LogThis event includes the complete ID as the structured string
-`LogThisCorrelationId`, with its full value also displayed. No additional events are
-created. The ID flows through nested method calls and normal async continuations.
-Nested scopes inherit the outer scope's ID **or its absence**, even if their
-configuration differs. Disposing a scope restores the preceding runtime context;
-independent outermost scopes have independent correlation state.
+By default, an outermost LogThis scope creates a 16-character, case-sensitive
+correlation ID and adds it to every LogThis event as
+`LogThisCorrelationId`. The ID flows through nested calls and async
+continuations. Nested scopes inherit the outer scope's ID; independent outermost
+scopes receive independent IDs.
 
 Set `options.LogCorrelationId = false` in the configuration callback, or
 `"LogCorrelationId": false` in the `LogThis` configuration section, to disable
-generation for new outermost scopes and omit the generated property. Changing
-configuration does not replace an active scope's correlation state. If generation
-fails, scope creation and application execution continue without an ID; nested
-scopes do not retry. `DebugLogThis` enables existing best-effort console diagnostics
-for that failure, and diagnostic failures are suppressed.
+generation for new outermost scopes. Changing configuration does not replace the
+ID of an active scope.
 
 Only LogThis-generated events are enriched. Explicit application logs are
-unaffected: LogThis does not use `ILogger.BeginScope` enrichment, read incoming
-headers, or reuse application IDs or `Activity.TraceId`. HTTP middleware opens a
-scope per request. Workers should open and dispose a scope per job or message
-when they need separate chains; scopes nested inside a long-lived worker scope
-share that outer chain. There is no explicit API to start a new chain inside one.
-
-This default adds a component to rendered logs. Custom `ILogThisConfiguration`
-implementations must add `LogCorrelationId`. `LogThisCorrelationId` is reserved
-for the generated field; the unprefixed name `CorrelationId` remains available
-for custom components.
+unaffected. LogThis does not read incoming headers or reuse
+`Activity.TraceId`. ASP.NET Core middleware opens one scope per request;
+workers should open one scope per job or message when separate correlation
+chains are required.
 
 ### Optional method duration
 
 Set `LogMethodDuration = true` in code, or `"LogMethodDuration": true` in the
-`LogThis` configuration section, to add a structured `LogThisDurationMs` number (a
-`double` in milliseconds) to enabled exit and exception events. It is disabled
-by default. Entry events have no duration, and enabling timing does not enable
-suppressed events or change their severity. Failed calls emit no successful exit.
-The rendered component is `Duration ms: 12.34`, while the structured `LogThisDurationMs`
-property remains numeric.
+`LogThis` configuration section, to add numeric `LogThisDurationMs` to enabled
+exit and exception events. It is disabled by default. Entry events have no
+duration, and enabling timing does not enable a disabled event or change its
+severity.
 
-Timing uses `Stopwatch` timestamps after entry logging, immediately before the
-method executes, and stops before completion-event formatting or emission.
-It measures elapsed time, including asynchronous waits, rather than CPU time.
-Parent durations include child calls and their logging. Async methods are timed
-through their normal awaited completion or failure. Disabled timing performs no
-clock reads. `[DontLogThis]` methods remain excluded.
-
-No iterator enumeration or buffering is added for timing. Existing iterator
-behavior remains unchanged: the Metalama fallback buffers iterator methods, so
-their duration can include that existing buffering, but does not measure later
-consumer processing. A method returning a deferred sequence without executing it
-measures only the method call. Avoid interpreting duration as sequence lifetime.
-
-Rebuild consumers to weave duration support. Existing runtime `Exit` and
-`Exception` overloads remain available and do not supply a duration. Custom
-`ILogThisConfiguration` implementations must add the `LogMethodDuration` property.
-Keep `LogThisDurationMs` available for this generated field when naming custom message
-components.
-
-## Sensitive-data masking
-
-When argument or return-value logging is enabled, LogThis serializes those
-values. Every property whose name matches `JsonFieldsToMask`, ignoring case, is
-replaced with `JsonMaskValue` at any nesting depth:
-
-```csharp
-builder.Services.AddLogThisConfiguration(options =>
-{
-    options.JsonFieldsToMask = ["Password", "AuthToken"];
-    options.JsonMaskValue = "*****";
-    options.LogMethodArguments = true;
-    options.LogMethodReturnValue = true;
-});
-```
-
-The rule also applies to objects in nested arrays, and a match replaces the
-property's entire value. Dotted paths, wildcards, and partial-value masking are
-not supported. Original objects are not modified.
-
-Do not rely on masking alone to protect sensitive information: fields not on
-the list are logged unchanged. Enable argument and return-value logging only
-when it is appropriate for the application's data and volume.
+Duration is elapsed milliseconds, including asynchronous waits and child calls,
+measured after entry logging and before completion-event logging. The rendered
+component is similar to `Duration ms: 12.34`, while the structured value remains
+a number. For deferred sequences, duration covers the method call rather than
+later consumer processing.
 
 ## Behavior and limitations
 

@@ -36,3 +36,8 @@ Component checks cover default and disabled labels, raw structured names and
 values, reserved-name validation across registration paths, case/brace/format
 normalization, disabled-feature reservations, allowed custom names, and the
 post-validation component snapshot policy.
+
+Masking checks cover MaskThisInLogs replacements, exclusion/configuration
+precedence, skipped throwing getters, whole object/collection replacement, null
+and empty values, nested models, dictionary/JSON fallback, configuration isolation,
+disabled capture, original object identity, and exception propagation.
