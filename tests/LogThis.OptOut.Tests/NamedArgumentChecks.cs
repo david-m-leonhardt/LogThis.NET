@@ -9,7 +9,7 @@ public static class NamedArgumentChecks
     public static async Task RunAsync()
     {
         var sink = new RecordingLogger();
-        var options = new LogThisConfiguration { LogMethodArguments = true };
+        var options = new LogThisConfiguration { LogMethodArguments = true, LogCorrelationId = false };
         options.JsonFieldsToMask.Add("Masked");
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddProvider(sink));

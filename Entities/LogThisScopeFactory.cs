@@ -7,14 +7,16 @@ namespace LogThis.Entities;
 /// <summary>Creates category-specific runtime scopes for console, worker, and HTTP callers.</summary>
 /// <param name="loggerFactory">Factory used to create the category logger.</param>
 /// <param name="configuration">Options used by events in every scope.</param>
+/// <param name="profiles">Complete named configurations, if registered.</param>
 internal sealed class LogThisScopeFactory(
     ILoggerFactory loggerFactory,
-    ILogThisConfiguration configuration) : ILogThisScopeFactory
+    ILogThisConfiguration configuration,
+    LogThisProfiles? profiles = null) : ILogThisScopeFactory
 {
     #region Private Fields
 
     // Freeze custom fields once per factory; direct dictionary edits cannot inject reserved keys later.
-    private readonly Dictionary<string, object> messageComponents = LogParameters.PrepareComponents(configuration.MessageComponents);
+    private readonly LogThisProfiles selections = profiles ?? new LogThisProfiles(configuration);
 
     #endregion
 
@@ -34,33 +36,22 @@ internal sealed class LogThisScopeFactory(
 
     /// <summary>Creates a scope with a per-call generation seam for failure tests.</summary>
     /// <param name="categoryName">Logging category.</param>
-    /// <param name="generateId">Cryptographic ID generator, called only for enabled outermost scopes.</param>
+    /// <param name="generateId">Cryptographic generator, called lazily by the first eligible event in a new chain.</param>
     /// <returns>A scope that restores the previous runtime.</returns>
     internal IDisposable BeginScope(string categoryName, Func<string> generateId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(categoryName);
 
         LogThisRuntime? previous = LogThisRuntimeContext.Current;
-        string? correlationId = previous?.CorrelationId;
-        // An existing scope with no ID is still an existing correlation chain.
-        if (previous == null)
-        {
-            try
-            {
-                if (configuration.LogCorrelationId) correlationId = generateId();
-            }
-            catch (Exception exception)
-            {
-                LogThisRuntimeLogger.ReportFailure(configuration, exception,
-                    "LogThis failed while generating a correlation ID.");
-            }
-        }
+        // Share even uninitialized or failed state; opening a scope never invokes the generator.
+        var correlation = previous?.Correlation ?? new LogThisRuntimeContext.CorrelationState(generateId);
 
         LogThisRuntime runtime = new(
             loggerFactory.CreateLogger(categoryName),
             configuration,
-            correlationId,
-            messageComponents);
+            correlation,
+            selections.Default.MessageComponents,
+            selections);
 
         return LogThisRuntimeContext.Push(runtime);
     }

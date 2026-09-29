@@ -27,10 +27,10 @@ suppression, method exclusions, provider failures, and configuration binding.
 An application-controlled task gate verifies awaited completion without sleeps
 or fixed timing thresholds.
 
-Correlation checks cover default format, disabled generation, scope-time creation,
-nested inheritance (including absent IDs), awaits, concurrent operation isolation,
+Correlation checks cover default format, lazy generation, disabled-to-enabled
+transitions, nested inheritance, awaits, concurrent first use and operation isolation,
 context restoration, event enrichment, explicit-log isolation, generation failures,
-configuration binding, and unchanged library-owned property names.
+configuration binding, filtered events, failed capture, and unchanged library-owned property names.
 
 Component checks cover default and disabled labels, raw structured names and
 values, reserved-name validation across registration paths, case/brace/format
@@ -41,3 +41,8 @@ Masking checks cover MaskThisInLogs replacements, exclusion/configuration
 precedence, skipped throwing getters, whole object/collection replacement, null
 and empty values, nested models, dictionary/JSON fallback, configuration isolation,
 disabled capture, original object identity, and exception propagation.
+
+Profile checks cover independent defaults, JSON/code layering and replacement,
+duplicate and invalid definitions, class/method selection, explicit default
+selection, single instrumentation, missing references, per-profile masks and
+custom fields, async/concurrent isolation, and scope-owned correlation identity.

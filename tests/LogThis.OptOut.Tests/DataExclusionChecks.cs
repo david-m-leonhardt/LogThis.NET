@@ -10,7 +10,7 @@ public static class DataExclusionChecks
     public static async Task RunAsync()
     {
         var sink = new RecordingLogger();
-        var options = new LogThisConfiguration { LogMethodArguments = true, LogMethodReturnValue = true };
+        var options = new LogThisConfiguration { LogMethodArguments = true, LogMethodReturnValue = true, LogCorrelationId = false };
         options.JsonFieldsToMask.Add("Masked");
         options.JsonMaskValue = "REDACTED";
         var services = new ServiceCollection();

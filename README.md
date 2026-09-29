@@ -6,8 +6,8 @@ applications keep control of their logging provider, and Metalama to weave the
 logging code at build time.
 
 > [!IMPORTANT]
-> This branch targets the upcoming 1.1.0-beta.1 prerelease, including `[DontLogThis]`.
-> LogThis.NET 1.0.0 is the first stable release.
+> This documentation targets LogThis.NET 1.1.0-beta.1. LogThis.NET 1.0.0 is
+> the latest stable release.
 
 ## Requirements
 
@@ -66,6 +66,25 @@ category other than the default `LogThis` category, pass it to the middleware:
 ```csharp
 app.UseLogThis("MyApplication.Methods");
 ```
+
+Apply `[LogThis]` to a method that should emit entry, exit, and exception
+events:
+
+```csharp
+using LogThis.Attributes;
+
+public class OrdersService
+{
+    [LogThis]
+    public async Task<Order> SubmitOrderAsync(OrderRequest request)
+    {
+        // Method implementation
+    }
+}
+```
+
+See [Attributes](#attributes) for class-level logging, exclusions, and
+sensitive-property masking.
 
 ## Logging provider setup
 
@@ -233,8 +252,8 @@ LogThis.NET provides three attributes with distinct purposes:
 
 ### `[LogThis]`
 
-Apply the attribute to one method or to a class. A class-level attribute wraps
-each public, non-abstract method:
+As shown in the quick start, `[LogThis]` can target one method. Apply it to a
+class to wrap each public, non-abstract method:
 
 ```csharp
 using LogThis.Attributes;
@@ -242,10 +261,10 @@ using LogThis.Attributes;
 [LogThis]
 public class OrdersService
 {
-    public async Task<Order> SubmitOrderAsync(OrderRequest request)
-    {
-        // Method implementation
-    }
+    public void SubmitOrder(OrderRequest request) { }
+
+    public Task<Order> GetOrderAsync(string orderId) =>
+        throw new NotImplementedException();
 }
 ```
 
@@ -382,9 +401,7 @@ argument component and avoids serialization, while configured events continue.
 
 The structured `{LogThisArguments}` property contains the complete JSON string,
 not one logger property per parameter. Renaming a source parameter changes its
-JSON key after rebuilding. Existing instrumentation created with the positional
-`LogThisMethodContext(string, string, object?[])` API retains positional output;
-manual contexts that need names can use `FromNamedArguments`.
+JSON key after rebuilding.
 
 ### `[MaskThisInLogs]`
 
@@ -522,13 +539,98 @@ provider; file reloads do not update an active provider.
 An application can also pass a specific `IConfigurationSection` or a prepared
 `LogThisConfiguration` instance to `AddLogThisConfiguration`.
 
+### Named configuration profiles
+
+The default configuration is always available. Add profiles under `LogThis:Profiles`
+to give selected methods a different complete configuration:
+
+```json
+{
+  "LogThis": {
+    "LogClassName": true,
+    "OnEntryConfig": { "AccessPointMessage": "Starting" },
+    "Profiles": {
+      "Detailed": {
+        "LogMethodArguments": true,
+        "LogMethodReturnValue": true,
+        "LogMethodDuration": true,
+        "JsonFieldsToMask": ["Password", "AuthToken"]
+      },
+      "ExternalCall": {
+        "LogMethodDuration": true,
+        "OnEntryConfig": { "LogAccessPoint": false },
+        "OnExceptionConfig": { "AccessPointMessage": "External call failed" }
+      }
+    }
+  }
+}
+```
+
+`AddLogThisConfiguration()` loads both the default settings and named profiles.
+Each profile is a complete configuration built from library defaults; it does
+not inherit the application's default configuration or another profile. In this
+example, `Detailed` still uses `LogClassName = false` and the default entry
+message `Entered`.
+
+Profiles can also be registered in code:
+
+```csharp
+builder.Services.AddLogThisConfiguration();
+builder.Services.AddLogThisProfile("Detailed", options =>
+{
+    options.LogMethodArguments = true;
+    options.LogMethodDuration = true;
+});
+builder.Services.AddLogThisProfile("ExternalCall", new LogThisConfiguration
+{
+    LogMethodDuration = true
+});
+```
+
+A callback is applied after a matching JSON profile; without matching JSON, it
+starts from library defaults. Passing a `LogThisConfiguration` instance supplies
+the complete profile instead. Names are trimmed and matched case-insensitively.
+Empty names and duplicate code definitions are rejected.
+
+Select a profile on the class or method:
+
+```csharp
+[LogThis(Profile = "Detailed")]
+public class OrderService
+{
+    public void Submit() { } // Detailed
+
+    [LogThis]
+    public void CheckStatus() { } // Default
+
+    [LogThis(Profile = "ExternalCall")]
+    public void Send() { } // ExternalCall
+
+    [DontLogThis]
+    public void Ignore() { } // No generated events
+}
+```
+
+A method-level `[LogThis]` overrides the class-level selection. An explicit
+method attribute without `Profile` selects the default configuration.
+`[DontLogThis]` always takes precedence, and profile selections are never
+merged.
+
+The selected profile controls events, levels, duration, labels, captured values,
+masking, custom components, and diagnostics. `[MaskThisInLogs]` without an
+explicit replacement uses that profile's `JsonMaskValue`.
+
+Profiles are validated when the scope factory is first resolved. An unknown
+profile throws `InvalidOperationException` when its method is called inside an
+active LogThis scope; LogThis does not silently fall back to the default.
+
 ### Options
 
 | Option | Default | Effect |
 | --- | --- | --- |
 | `LogClassName` | `false` | Adds the declaring class as `{LogThisClass}`. |
 | `LogComponentLabels` | `true` | Adds descriptive labels such as `Class:` and `Method:` to rendered components. |
-| `LogCorrelationId` | `true` | Creates an outermost-scope ID and adds `{LogThisCorrelationId}` to LogThis events. |
+| `LogCorrelationId` | `true` | Lazily obtains the chain's ID for eligible events and adds `{LogThisCorrelationId}`. |
 | `LogMethodName` | `true` | Adds the method as `{LogThisMethod}`. |
 | `LogMethodArguments` | `false` | Adds `{LogThisArguments}` to entry and exception events. |
 | `LogMethodReturnValue` | `false` | Adds `{LogThisReturnValue}` to exit events and an empty value to exception events. |
@@ -591,16 +693,18 @@ or replacements do not affect that service provider's events.
 
 ### Correlation IDs
 
-By default, an outermost LogThis scope creates a 16-character, case-sensitive
-correlation ID and adds it to every LogThis event as
-`LogThisCorrelationId`. The ID flows through nested calls and async
-continuations. Nested scopes inherit the outer scope's ID; independent outermost
-scopes receive independent IDs.
+Correlation is enabled by default. LogThis generates a 16-character,
+case-sensitive ID when the first enabled event in an operation needs it and adds
+the value to that event as `LogThisCorrelationId`.
 
 Set `options.LogCorrelationId = false` in the configuration callback, or
-`"LogCorrelationId": false` in the `LogThis` configuration section, to disable
-generation for new outermost scopes. Changing configuration does not replace the
-ID of an active scope.
+`"LogCorrelationId": false` in the default or named profile configuration, to
+omit correlation from those events. Disabled or filtered events do not trigger
+ID generation.
+
+Nested scopes, profile selections, and async continuations share the same
+correlation state. Once generated, enabled events in that operation reuse the
+same ID; independent outermost scopes receive independent IDs.
 
 Only LogThis-generated events are enriched. Explicit application logs are
 unaffected. LogThis does not read incoming headers or reuse

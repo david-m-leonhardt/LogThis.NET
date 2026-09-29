@@ -27,8 +27,8 @@
         /// <value><see langword="true"/> by default.</value>
         bool LogComponentLabels { get; set; }
 
-        /// <summary>Creates a correlation ID when the outermost LogThis scope starts.</summary>
-        /// <remarks>The ID has 16 case-sensitive alphanumeric characters and flows across awaits. Nested scopes inherit the ID or its absence. Generation failure leaves the scope without an ID. Only LogThis events are enriched.</remarks>
+        /// <summary>Includes the chain's correlation ID, generating it lazily for the first eligible event that needs it.</summary>
+        /// <remarks>The 16-character cryptographic alphanumeric ID is case-sensitive and shared across nested scopes, profiles, and awaits. Disabled or filtered events do not request an ID. One generation attempt is made per chain; failure permits logging without an ID, with best-effort debug diagnostics. Only LogThis events are enriched.</remarks>
         /// <value><see langword="true"/> by default.</value>
         bool LogCorrelationId { get; set; }
 

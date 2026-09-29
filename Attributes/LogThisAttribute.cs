@@ -22,6 +22,14 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
 
     #endregion
 
+    #region Public Properties
+
+    /// <summary>Selects a complete named configuration; null selects the default configuration.</summary>
+    /// <remarks>Names are trimmed and matched case-insensitively. Method attributes override class selection, including explicit default selection. Unknown names fail when invoked in an active scope.</remarks>
+    public string? Profile { get; set; }
+
+    #endregion
+
     #region Public Methods
 
     /// <summary>Instruments eligible public methods of an annotated class, respecting method exclusions.</summary>
@@ -38,7 +46,8 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
         foreach (IMethod method in builder.Target.Methods)
         {
             if (method.Accessibility == Accessibility.Public && !method.IsAbstract &&
-                !method.Attributes.OfAttributeType(typeof(DontLogThisAttribute)).Any())
+                !method.Attributes.OfAttributeType(typeof(DontLogThisAttribute)).Any() &&
+                !method.Attributes.OfAttributeType(typeof(LogThisAttribute)).Any())
             {
                 builder.With(method).Override(templates);
             }
@@ -62,6 +71,7 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
     /// <returns>The original method's result after it completes, if any.</returns>
     public override async Task<dynamic?> OverrideAsyncMethod()
     {
+        using var profileScope = LogThisRuntimeLogger.SelectProfile(meta.CompileTime(Profile));
         List<KeyValuePair<string, object?>> arguments = [];
         CaptureArguments(arguments);
         LogThisMethodContext context = LogThisMethodContext.FromNamedArguments(
@@ -91,6 +101,7 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
     /// <returns>The original method's result, if any.</returns>
     public override dynamic? OverrideMethod()
     {
+        using var profileScope = LogThisRuntimeLogger.SelectProfile(meta.CompileTime(Profile));
         List<KeyValuePair<string, object?>> arguments = [];
         CaptureArguments(arguments);
         LogThisMethodContext context = LogThisMethodContext.FromNamedArguments(

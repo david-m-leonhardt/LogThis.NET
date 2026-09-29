@@ -26,19 +26,22 @@ public static class CorrelationChecks
         using (factory.BeginScope("outer"))
         {
             var outer = LogThisRuntimeContext.Current!;
+            Check(outer.CorrelationId == null && sink.Events.IsEmpty, "Scope creation generated an ID or event.");
+            Check(sample.Success() == 42, "Result changed.");
             string id = outer.CorrelationId!;
             Check(id.Length == 16 && id.All(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9'), "Invalid ID format.");
-            Check(sink.Events.IsEmpty, "Scope creation emitted an event.");
-            Check(sample.Success() == 42, "Result changed.");
             await sample.ValueAwait();
             await ParentCall();
             // Nested configuration cannot replace existing correlation state, even when disabled.
-            var nestedFactory = new LogThisScopeFactory(loggerFactory, new LogThisConfiguration { LogCorrelationId = false });
+            var nestedSink = new CorrelationLogger();
+            using var nestedLoggerFactory = LoggerFactory.Create(b => b.AddProvider(nestedSink));
+            var nestedFactory = new LogThisScopeFactory(nestedLoggerFactory, new LogThisConfiguration { LogCorrelationId = false });
             using (nestedFactory.BeginScope("nested", () => throw new Exception("Nested generator called.")))
             {
                 Check(LogThisRuntimeContext.Current!.CorrelationId == id, "Nested ID changed.");
                 await Task.Yield();
                 sample.Success();
+                Check(nestedSink.Events.Count == 2 && nestedSink.Events.All(e => e.All(p => p.Key != "LogThisCorrelationId")), "Disabled event correlation was included.");
             }
             Check(ReferenceEquals(LogThisRuntimeContext.Current, outer), "Outer runtime was not restored.");
             try { sample.Fail(failure); throw new Exception("Failure swallowed."); }
@@ -64,18 +67,23 @@ public static class CorrelationChecks
 
         int generated = 0;
         options.LogCorrelationId = false;
-        using (factory.BeginScope("disabled", () => { generated++; return "AbCdEf0123456789"; }))
+        using (factory.BeginScope("disabled", () => { generated++; return "AbCdEf0123456789Z"; }))
         {
             Check(generated == 0, "Disabled scope generated an ID.");
+            sample.Success();
+            Check(generated == 0 && sink.Events.All(e => e.All(p => p.Key != "LogThisCorrelationId")), "Disabled events requested correlation.");
+            sink.Events.Clear();
             options.LogCorrelationId = true;
-            using (factory.BeginScope("nested", () => { generated++; return "AbCdEf0123456789"; }))
+            using (factory.BeginScope("nested", () => throw new Exception("Nested generator used.")))
             {
                 sample.Success();
-                Check(LogThisRuntimeContext.Current!.CorrelationId == null && generated == 0, "Nested scope replaced absent ID.");
+                Check(LogThisRuntimeContext.Current!.CorrelationId == "AbCdEf0123456789Z" && generated == 1, "Nested first use did not initialize shared state.");
             }
-            Check(sink.Events.All(e => e.All(p => p.Key != "LogThisCorrelationId")), "Absent correlation was emitted.");
+            sample.Success();
+            Check(generated == 1 && sink.Events.All(e => e.Any(p => p.Key == "LogThisCorrelationId" && Equals(p.Value, "AbCdEf0123456789Z"))), "Returning to outer scope lost shared ID.");
         }
         sink.Events.Clear();
+        generated = 0;
         foreach (bool debug in new[] { false, true })
         {
             options.DebugLogThis = debug;
@@ -96,18 +104,69 @@ public static class CorrelationChecks
         async Task<string> Operation()
         {
             using var operation = factory.BeginScope("concurrent");
-            string id = LogThisRuntimeContext.Current!.CorrelationId!;
             if (Interlocked.Increment(ref ready) == 2) release.SetResult();
             await release.Task.WaitAsync(TimeSpan.FromSeconds(10));
-            Check(LogThisRuntimeContext.Current!.CorrelationId == id, "Concurrent context changed.");
+            Check(LogThisRuntimeContext.Current!.CorrelationId == null, "Independent scope generated early.");
             sample.Success();
-            return id;
+            return LogThisRuntimeContext.Current!.CorrelationId!;
         }
         string[] ids = await Task.WhenAll(Task.Run(Operation), Task.Run(Operation));
         Check(ids[0] != ids[1] && LogThisRuntimeContext.Current == null, "Independent scopes were not isolated.");
         foreach (string id in ids)
             Check(sink.Events.Count(e => e.Any(p => p.Key == "LogThisCorrelationId" && Equals(p.Value, id))) == 2, "Concurrent event ID mismatch.");
         sink.Events.Clear();
+
+        // Simultaneous first events in a single inherited chain must share one attempt.
+        foreach (bool failGeneration in new[] { false, true })
+        {
+            generated = 0;
+            using (factory.BeginScope("shared", () =>
+            {
+                Interlocked.Increment(ref generated);
+                if (failGeneration) throw new InvalidOperationException("shared failure");
+                return "AbCdEf0123456789Z";
+            }))
+            {
+                var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                Task[] calls = Enumerable.Range(0, 16).Select(_ => Task.Run(async () =>
+                {
+                    await start.Task;
+                    using var nested = factory.BeginScope("parallel child");
+                    sample.Success();
+                })).ToArray();
+                Check(generated == 0, "Scope initialization was not lazy.");
+                start.SetResult();
+                await Task.WhenAll(calls).WaitAsync(TimeSpan.FromSeconds(10));
+                Check(generated == 1 && sink.Events.Count == 32, "Concurrent first use retried or lost events.");
+                Check(sink.Events.All(e => failGeneration
+                    ? e.All(p => p.Key != "LogThisCorrelationId")
+                    : e.Any(p => p.Key == "LogThisCorrelationId" && Equals(p.Value, "AbCdEf0123456789Z"))), "Concurrent first-use state diverged.");
+            }
+            sink.Events.Clear();
+        }
+
+        // Event and provider filters (and failed capture) must leave correlation uninitialized.
+        var filteredSink = new DurationLogger { Enabled = false };
+        using var filteredLoggerFactory = LoggerFactory.Create(b => b.AddProvider(filteredSink));
+        var filteredOptions = new LogThisConfiguration();
+        var filteredFactory = new LogThisScopeFactory(filteredLoggerFactory, filteredOptions);
+        generated = 0;
+        using (filteredFactory.BeginScope("filtered", () => { generated++; return "AbCdEf0123456789Z"; }))
+        {
+            sample.Success();
+            filteredSink.Enabled = true;
+            filteredOptions.OnEntryConfig.LogAccessPoint = false;
+            filteredOptions.OnExitConfig.LogAccessPoint = false;
+            sample.Success();
+            Check(generated == 0, "Filtered events generated correlation.");
+            filteredOptions.OnEntryConfig.LogAccessPoint = true;
+            filteredOptions.LogMethodArguments = true;
+            LogThisRuntimeLogger.Entry(new LogThisMethodContext("capture", "test", [new ThrowingCapture()]));
+            Check(generated == 0, "Failed serialization generated correlation.");
+            filteredOptions.LogMethodArguments = false;
+            sample.Success();
+            Check(generated == 1 && filteredSink.Events.Count == 1, "First eligible event did not generate correlation.");
+        }
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(
             new Dictionary<string, string?> { ["LogThis:LogCorrelationId"] = "false" }).Build();

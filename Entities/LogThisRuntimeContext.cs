@@ -6,13 +6,19 @@ namespace LogThis.Entities;
 /// <summary>The logger and configuration selected for one active logging scope.</summary>
 /// <param name="Logger">Logger created for the scope's category.</param>
 /// <param name="Configuration">Options shared by events in the scope.</param>
-/// <param name="CorrelationId">Outermost scope's ID, or null when disabled or generation failed.</param>
+/// <param name="Correlation">Shared lazy correlation state for the entire operation chain.</param>
 /// <param name="MessageComponents">Validated custom fields captured when the scope factory was created.</param>
+/// <param name="Profiles">Default and named configurations for the operation's provider.</param>
 internal sealed record LogThisRuntime(
     ILogger Logger,
     ILogThisConfiguration Configuration,
-    string? CorrelationId,
-    Dictionary<string, object> MessageComponents);
+    LogThisRuntimeContext.CorrelationState Correlation,
+    Dictionary<string, object> MessageComponents,
+    LogThisProfiles Profiles)
+{
+    /// <summary>The ID if already generated; reading this property never generates one.</summary>
+    internal string? CorrelationId => Correlation.Id;
+}
 
 /// <summary>Flows the current runtime through asynchronous execution without global reinitialization.</summary>
 internal static class LogThisRuntimeContext
@@ -68,6 +74,46 @@ internal static class LogThisRuntimeContext
             if (disposed) return;
             disposed = true;
             restore();
+        }
+
+        #endregion
+    }
+
+    #endregion
+
+    #region Internal Class
+
+    /// <summary>Coordinates one cryptographic generation attempt across all scopes and methods in a chain.</summary>
+    internal sealed class CorrelationState(Func<string> generateId)
+    {
+        #region Private Fields
+
+        // ExecutionAndPublication shares a value or caches a failure, without retrying the generator.
+        private readonly Lazy<string> id = new(generateId, LazyThreadSafetyMode.ExecutionAndPublication);
+        private int failureReported;
+
+        #endregion
+
+        #region Internal Properties
+
+        /// <summary>Observes a completed ID without triggering generation.</summary>
+        internal string? Id => id.IsValueCreated ? id.Value : null;
+
+        #endregion
+
+        #region Internal Methods
+
+        /// <summary>Obtains the shared ID for an eligible event, isolating generation and diagnostic failures.</summary>
+        internal string? GetId(ILogThisConfiguration configuration)
+        {
+            try { return id.Value; }
+            catch (Exception exception)
+            {
+                if (Interlocked.Exchange(ref failureReported, 1) == 0)
+                    LogThisRuntimeLogger.ReportFailure(configuration, exception,
+                        "LogThis failed while generating a correlation ID.");
+                return null;
+            }
         }
 
         #endregion
