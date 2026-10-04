@@ -46,3 +46,9 @@ Profile checks cover independent defaults, JSON/code layering and replacement,
 duplicate and invalid definitions, class/method selection, explicit default
 selection, single instrumentation, missing references, per-profile masks and
 custom fields, async/concurrent isolation, and scope-owned correlation identity.
+
+Activity checks use controlled activities without tracing services. They cover
+all trace/span setting combinations, labels and complete structured values,
+default/named configuration, missing and hierarchical context, awaits, nested
+activities, concurrent contexts, method exclusions, filters, and provider failures.
+The reservation matrix includes both activity property names.

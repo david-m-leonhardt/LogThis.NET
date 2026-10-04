@@ -27,5 +27,9 @@
         public const string OnExitLabel = "{LogThisOnExit}";
         /// <summary>Placeholder for the serialized return value.</summary>
         public const string ReturnValueLabel = "{LogThisReturnValue}";
+        /// <summary>Placeholder for the existing activity trace ID.</summary>
+        public const string TraceIdLabel = "{LogThisTraceId}";
+        /// <summary>Placeholder for the existing activity span ID.</summary>
+        public const string SpanIdLabel = "{LogThisSpanId}";
     }
 }

@@ -628,6 +628,9 @@ active LogThis scope; LogThis does not silently fall back to the default.
 
 | Option | Default | Effect |
 | --- | --- | --- |
+| `DebugLogThis` | `false` | Enables best-effort console diagnostics for internal LogThis failures. |
+| `JsonFieldsToMask` | Empty | Lists JSON property names to redact. |
+| `JsonMaskValue` | `"*****"` | Sets the replacement for redacted values. |
 | `LogClassName` | `false` | Adds the declaring class as `{LogThisClass}`. |
 | `LogComponentLabels` | `true` | Adds descriptive labels such as `Class:` and `Method:` to rendered components. |
 | `LogCorrelationId` | `true` | Lazily obtains the chain's ID for eligible events and adds `{LogThisCorrelationId}`. |
@@ -635,11 +638,10 @@ active LogThis scope; LogThis does not silently fall back to the default.
 | `LogMethodArguments` | `false` | Adds `{LogThisArguments}` to entry and exception events. |
 | `LogMethodReturnValue` | `false` | Adds `{LogThisReturnValue}` to exit events and an empty value to exception events. |
 | `LogMethodDuration` | `false` | Adds numeric `{LogThisDurationMs}` to existing exit and exception events. |
+| `LogSpanId` | `false` | Includes an existing W3C activity span ID as `{LogThisSpanId}`. |
+| `LogTraceId` | `false` | Includes an existing W3C activity trace ID as `{LogThisTraceId}`. |
 | `MessageDelimeter` | Space, pipe, space | Separates placeholders in the message template. |
 | `MessageComponents` | Empty | Adds custom structured properties to every event. |
-| `JsonFieldsToMask` | Empty | Lists JSON property names to redact. |
-| `JsonMaskValue` | `"*****"` | Sets the replacement for redacted values. |
-| `DebugLogThis` | `false` | Enables best-effort console diagnostics for internal LogThis failures. |
 
 `OnEntryConfig`, `OnExceptionConfig`, and `OnExitConfig` each provide:
 
@@ -653,7 +655,7 @@ active LogThis scope; LogThis does not silently fall back to the default.
 in the registration callback, or `"LogComponentLabels": false` in the `LogThis`
 configuration section, to omit descriptive component labels. It controls labels
 such as `Class:`, `Method:`, `Arguments:`, `Return value:`, `Duration ms:`,
-and `Correlation ID:`.
+`Correlation ID:`, `Trace ID:`, and `Span ID:`.
 
 `LogComponentLabels` does not control the access-point message at the beginning
 of an event. Entry, exit, and exception messages remain independently
@@ -681,6 +683,7 @@ properties, regardless of case or whether the related feature is enabled:
 - `LogThisOnEntry`, `LogThisOnExit`, `LogThisOnException`
 - `LogThisClass`, `LogThisMethod`, `LogThisArguments`, `LogThisReturnValue`
 - `LogThisDurationMs`, `LogThisCorrelationId`
+- `LogThisTraceId`, `LogThisSpanId`
 
 Other names, including names such as `LogThisCustom`, `Method`, and
 `CorrelationId`, are allowed. Bare names and single brace-wrapped placeholders
@@ -707,10 +710,79 @@ correlation state. Once generated, enabled events in that operation reuse the
 same ID; independent outermost scopes receive independent IDs.
 
 Only LogThis-generated events are enriched. Explicit application logs are
-unaffected. LogThis does not read incoming headers or reuse
-`Activity.TraceId`. ASP.NET Core middleware opens one scope per request;
+unaffected. LogThis does not read incoming headers or derive its correlation ID
+from `Activity.TraceId`. ASP.NET Core middleware opens one scope per request;
 workers should open one scope per job or message when separate correlation
 chains are required.
+
+### Existing trace and span IDs
+
+Enable either or both settings to include existing `System.Diagnostics.Activity`
+context in LogThis events:
+
+```csharp
+builder.Services.AddLogThisConfiguration(options =>
+{
+    options.LogTraceId = true;
+    options.LogSpanId = true;
+});
+```
+
+The same settings work in JSON and named profiles:
+
+```json
+{
+  "LogThis": {
+    "LogTraceId": true,
+    "LogSpanId": true
+  }
+}
+```
+
+Both default to `false` and are independent: a provider or application may already
+supply one identifier. Trace IDs group a distributed operation; span IDs identify
+individual operations within it. Ordinary method calls do not automatically
+create spans. These settings only include existing context; they do not create
+tracing, start or stop activities, or change sampling or exporters.
+
+For each eligible event, LogThis reads `Activity.Current` once and uses that
+activity for both fields. The selected profile determines which fields appear.
+`LogThisTraceId` contains the complete 32-character hexadecimal trace ID, and
+`LogThisSpanId` contains the complete 16-character hexadecimal span ID. With
+component labels enabled, their labels are `Trace ID:` and `Span ID:`; disabling
+labels leaves the same structured names and values. Both names are reserved for
+LogThis, even when disabled.
+
+Missing, non-W3C, or invalid identifiers are omitted without replacement IDs or
+absence diagnostics. Activity context follows its normal async flow. If application
+code creates a nested activity, events use its current span and return to the
+parent's span after that activity ends. LogThis correlation IDs remain independent
+and retain their existing lazy generation and operation-chain lifetime.
+
+Method exclusions leave activity context intact:
+
+```csharp
+[LogThis]
+public class OrderService
+{
+    [DontLogThis]
+    public void Submit()
+    {
+        Validate();
+    }
+
+    public void Validate() { }
+}
+```
+
+`Submit` emits no generated events. `Validate` still emits its configured events
+with the existing activity identifiers when enabled. Neither method creates a
+span through LogThis. Explicit application logs are not enriched by this feature.
+
+Custom `ILogThisConfiguration` implementations must add `LogTraceId` and
+`LogSpanId`. Existing applications using `LogThisConfiguration` keep their current
+output unless these settings are enabled. Context must already be supplied by the
+application or its instrumentation; no tracing service is required by LogThis.
 
 ### Optional method duration
 

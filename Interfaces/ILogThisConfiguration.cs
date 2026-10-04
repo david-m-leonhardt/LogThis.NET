@@ -50,13 +50,23 @@
         /// <value><see langword="true"/> to add a return-value component.</value>
         bool LogMethodReturnValue { get; set; }
 
+        /// <summary>Includes the current W3C activity's 16-character hexadecimal span ID as LogThisSpanId.</summary>
+        /// <remarks>Reads existing activity context per eligible event without creating spans. Independent of LogTraceId; absent, non-W3C, or invalid context is omitted.</remarks>
+        /// <value><see langword="false"/> by default.</value>
+        bool LogSpanId { get; set; }
+
+        /// <summary>Includes the current W3C activity's 32-character hexadecimal trace ID as LogThisTraceId.</summary>
+        /// <remarks>Reads existing activity context per eligible event without creating tracing. Independent of LogSpanId; absent, non-W3C, or invalid context is omitted.</remarks>
+        /// <value><see langword="false"/> by default.</value>
+        bool LogTraceId { get; set; }
+
         /// <summary>Custom properties added to every log event.</summary>
         /// <remarks>
         /// Names are validated at configuration resolution and copied when the scope factory is created.
         /// Later dictionary edits no longer affect that factory's events; referenced values are not cloned.
         /// Reserved names (case-insensitive, with or without braces) are LogThisOnEntry, LogThisOnExit,
         /// LogThisOnException, LogThisClass, LogThisMethod, LogThisArguments, LogThisReturnValue,
-        /// LogThisDurationMs, and LogThisCorrelationId, even when the corresponding feature is disabled.
+        /// LogThisDurationMs, LogThisCorrelationId, LogThisTraceId, and LogThisSpanId, even when the corresponding feature is disabled.
         /// </remarks>
         /// <value>Message-template placeholders mapped to their values.</value>
         Dictionary<string, object> MessageComponents { get; }

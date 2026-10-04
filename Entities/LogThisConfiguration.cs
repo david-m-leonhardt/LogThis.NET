@@ -53,13 +53,23 @@ namespace LogThis.Entities
         /// <value><see langword="false"/> by default.</value>
         public bool LogMethodReturnValue { get; set; }
 
+        /// <summary>Includes the current W3C activity's 16-character hexadecimal span ID as LogThisSpanId.</summary>
+        /// <remarks>Reads existing activity context per eligible event without creating spans. Independent of LogTraceId; absent, non-W3C, or invalid context is omitted.</remarks>
+        /// <value><see langword="false"/> by default.</value>
+        public bool LogSpanId { get; set; } = false;
+
+        /// <summary>Includes the current W3C activity's 32-character hexadecimal trace ID as LogThisTraceId.</summary>
+        /// <remarks>Reads existing activity context per eligible event without creating tracing. Independent of LogSpanId; absent, non-W3C, or invalid context is omitted.</remarks>
+        /// <value><see langword="false"/> by default.</value>
+        public bool LogTraceId { get; set; } = false;
+
         /// <summary>Additional structured properties included with every event.</summary>
         /// <remarks>
         /// Names are validated at configuration resolution and copied when the scope factory is created.
         /// Later dictionary edits no longer affect that factory's events; referenced values are not cloned.
         /// Reserved names (case-insensitive, with or without braces) are LogThisOnEntry, LogThisOnExit,
         /// LogThisOnException, LogThisClass, LogThisMethod, LogThisArguments, LogThisReturnValue,
-        /// LogThisDurationMs, and LogThisCorrelationId, even when the corresponding feature is disabled.
+        /// LogThisDurationMs, LogThisCorrelationId, LogThisTraceId, and LogThisSpanId, even when the corresponding feature is disabled.
         /// </remarks>
         /// <value>An initially empty dictionary whose keys are message-template placeholders.</value>
         public Dictionary<string, object> MessageComponents { get; } = [];

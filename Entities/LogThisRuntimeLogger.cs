@@ -36,6 +36,8 @@ public static class LogThisRuntimeLogger
             if (!accessPoint.LogAccessPoint || !runtime.Logger.IsEnabled(accessPoint.LogLevel)) return;
 
             ILogThisConfiguration configuration = runtime.Configuration;
+            // Read the ambient activity once per eligible event, never at operation-scope creation.
+            Activity? activity = configuration.LogTraceId || configuration.LogSpanId ? Activity.Current : null;
             // Finish capture before requesting an ID: a serialization failure will suppress this event.
             string? capturedArguments = arguments != null && configuration.LogMethodArguments
                 ? LogThisValueMasker.MaskArguments(context) : null;
@@ -57,6 +59,20 @@ public static class LogThisRuntimeLogger
             {
                 parameters.AddMessage((configuration.LogComponentLabels ? "Correlation ID: " : "") + MessageComponentConstants.CorrelationIdLabel);
                 parameters.AddArgs(correlationId);
+            }
+
+            if (activity?.IdFormat == ActivityIdFormat.W3C)
+            {
+                if (configuration.LogTraceId && activity.TraceId != default)
+                {
+                    parameters.AddMessage((configuration.LogComponentLabels ? "Trace ID: " : "") + MessageComponentConstants.TraceIdLabel);
+                    parameters.AddArgs(activity.TraceId.ToHexString());
+                }
+                if (configuration.LogSpanId && activity.SpanId != default)
+                {
+                    parameters.AddMessage((configuration.LogComponentLabels ? "Span ID: " : "") + MessageComponentConstants.SpanIdLabel);
+                    parameters.AddArgs(activity.SpanId.ToHexString());
+                }
             }
 
             if (durationMs.HasValue)

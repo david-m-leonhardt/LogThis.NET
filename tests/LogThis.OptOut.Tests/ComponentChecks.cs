@@ -68,7 +68,7 @@ public static class ComponentChecks
     /// <summary>Every generated name is reserved through every registration route, even with features disabled.</summary>
     private static void CheckReservations()
     {
-        string[] reserved = ["LogThisOnEntry", "LogThisOnExit", "LogThisOnException", "LogThisClass", "LogThisMethod", "LogThisArguments", "LogThisReturnValue", "LogThisDurationMs", "LogThisCorrelationId"];
+        string[] reserved = ["LogThisOnEntry", "LogThisOnExit", "LogThisOnException", "LogThisClass", "LogThisMethod", "LogThisArguments", "LogThisReturnValue", "LogThisDurationMs", "LogThisCorrelationId", "LogThisTraceId", "LogThisSpanId"];
         foreach (string name in reserved)
         {
             foreach (string key in new[] { name, "{" + name.ToLowerInvariant() + "}", name.ToUpperInvariant(), "{" + name + ",10}", "{" + name + ":N2}", "{@" + name + "}", "{$" + name + "}" })
