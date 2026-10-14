@@ -244,11 +244,14 @@ active scope do not produce LogThis events.
 
 ## Attributes
 
-LogThis.NET provides three attributes with distinct purposes:
+LogThis.NET provides four attributes with distinct purposes:
 
 - `[LogThis]` enables method-boundary logging.
 - `[DontLogThis]` excludes a method or captured value.
-- `[MaskThisInLogs]` replaces a captured parameter or property value with safe text.
+- `[MaskThisInLogs]` replaces a captured parameter or property value with safe
+  text.
+- `[MaskReturnInLogs]` replaces a captured successful return value with safe
+  text.
 
 ### `[LogThis]`
 
@@ -262,9 +265,6 @@ using LogThis.Attributes;
 public class OrdersService
 {
     public void SubmitOrder(OrderRequest request) { }
-
-    public Task<Order> GetOrderAsync(string orderId) =>
-        throw new NotImplementedException();
 }
 ```
 
@@ -405,8 +405,15 @@ JSON key after rebuilding.
 
 ### `[MaskThisInLogs]`
 
-Use the attribute on a parameter to retain its name while replacing its entire
-logged value:
+Use `[MaskThisInLogs]` on a parameter or property that should remain present in
+captured data without exposing its value. Without an argument, it uses the
+selected profile's `JsonMaskValue` (`*****` by default). Passing a string uses
+that fixed replacement; an empty string is valid.
+An explicitly null replacement is invalid.
+
+#### Masking parameters
+
+A masked parameter retains its name while its entire value is replaced:
 
 ```csharp
 [LogThis]
@@ -424,26 +431,18 @@ With argument capture enabled and the default mask, the argument component is:
 Arguments: {"password":"*****","token":"[TOKEN]"}
 ```
 
-Without a replacement, parameter masking uses the selected profile's
-`JsonMaskValue`. A supplied literal, including an empty string, remains fixed.
-Nulls, objects, and collections are replaced without inspecting or serializing
-their contents. `[DontLogThis]` takes precedence and omits the parameter's name
-and value entirely. Masks apply to entry and exception argument capture and do
-not enable disabled capture or events.
+Nulls, objects, and collections are replaced without inspecting their contents.
+The mask applies to that method's entry and exception argument capture; it does
+not follow the value into return capture or another method call.
 
-Parameter masking changes only that method's captured arguments. It does not
-follow values into return capture or other method calls, and it does not change
-application arguments, results, or exceptions. Property masking continues to apply
-wherever an object is captured. `JsonFieldsToMask` continues matching property
-names, not parameter names.
+`[DontLogThis]` takes precedence and removes both the parameter name and value.
+`JsonFieldsToMask` continues to match serialized property names, not parameter
+names.
 
-The attribute supports parameters and properties only.
-Explicitly null replacements are rejected. Invalid parameter replacements are
-reported during weaving; omit the constructor argument to use `JsonMaskValue`.
-Rebuild consumers to weave parameter masking support.
+#### Masking properties
 
-Use `[MaskThisInLogs]` on a model property that may be captured but should not
-expose its value:
+Annotate model properties whose values may appear in captured arguments or
+return values:
 
 ```csharp
 public class LoginRequest
@@ -456,46 +455,51 @@ public class LoginRequest
 }
 ```
 
-Without an argument, the attribute uses the configured `JsonMaskValue`
-(`*****` by default). Passing a string uses that fixed replacement; an empty
-string is valid. The replacement covers the property's entire value, including
-objects and collections.
-
-The attribute applies to properties captured as arguments, return values,
-nested objects, or collection items. For ordinary properties, LogThis writes the
-replacement without invoking the getter. It does not modify the original object
-or sanitize explicit application logs and exception messages.
+Property masking applies to nested objects and collection items. LogThis
+replaces the entire property value without invoking an ordinary property getter.
+It does not modify the original object.
 
 `[DontLogThis]` takes precedence and omits the property. An explicit
 `[MaskThisInLogs("...")]` value takes precedence over configuration-based
 masking.
 
-Property masking requires an annotation on each declaration. An unchanged
-inherited property keeps its masking. An override, including a concrete override
-of an annotated abstract property, or a `new` hiding property requires its own
-`[MaskThisInLogs]`.
+An inherited property keeps its annotation when used unchanged. An override or
+`new` hiding property is a new declaration and must be annotated separately.
+Configuration-based property masking can still apply when an annotation is not
+present.
+
+### `[MaskReturnInLogs]`
+
+Use this method-only attribute to replace an entire successful return value
+captured by LogThis:
 
 ```csharp
-public class BaseModel
-{
-    [MaskThisInLogs] public string Password { get; init; } = "";
-    [MaskThisInLogs] public virtual string Secret => "base";
-    [MaskThisInLogs] public string Token => "base";
-}
+[LogThis]
+[MaskReturnInLogs]
+public string CreateToken() => "application token";
 
-public class DerivedModel : BaseModel
-{
-    // Password is inherited unchanged and remains masked.
-    public override string Secret => "derived"; // Eligible for capture.
-    [MaskThisInLogs("[TOKEN]")] public new string Token => "derived";
-}
+[LogThis]
+[MaskReturnInLogs("[TOKEN]")]
+public Task<string> CreateTokenAsync() => Task.FromResult("application token");
 ```
 
-Unannotated overrides and hiding properties remain eligible for capture unless
-another exclusion or configuration-based masking rule applies. Annotate the
-override itself to mask it. Each annotated property uses its explicit replacement
-or the selected profile's `JsonMaskValue`, without invoking its getter. These
-inheritance rules document existing behavior; they do not change capture behavior.
+The first method uses the selected profile's `JsonMaskValue`; the second uses
+the literal `[TOKEN]`. Empty replacements are valid, and null and non-null
+results receive the same mask. The structured `LogThisReturnValue` remains a
+JSON string, such as `"[TOKEN]"`.
+
+LogThis does not inspect or serialize a masked result, and application code
+receives the original value and object identity. Async methods mask their normal
+awaited result. Overrides require their own annotation.
+
+The attribute has an effect only when the method is instrumented and return
+capture, its exit event, and its log level are enabled. Failed calls continue to
+emit exception events without a fabricated result. `[DontLogThis]` takes
+precedence.
+
+An explicitly null replacement is invalid. Applying the attribute to a method
+without a usable result, such as `void`, `Task`, or `ValueTask`, has no effect
+and produces a build warning.
 
 ## Sensitive-data masking
 
@@ -516,11 +520,14 @@ Matching is case-insensitive and applies at any nesting depth, including objects
 inside arrays. A match replaces the property's entire value. Dotted paths,
 wildcards, and partial-value masking are not supported.
 
-Masking precedence is:
+For captured properties, masking precedence is:
 
 1. `[DontLogThis]` omits the property.
 2. `[MaskThisInLogs("replacement")]` uses its explicit replacement.
 3. `[MaskThisInLogs]` or a configured name match uses `JsonMaskValue`.
+
+Parameter masks and `[MaskReturnInLogs]` apply directly to their annotated
+parameter or method and do not use `JsonFieldsToMask`.
 
 For ordinary object properties, attribute and configured-name masking occur
 without invoking the matched getter. Dictionary entries, existing JSON objects,
@@ -779,10 +786,11 @@ from `Activity.TraceId`. ASP.NET Core middleware opens one scope per request;
 workers should open one scope per job or message when separate correlation
 chains are required.
 
-### Existing trace and span IDs
+### Activity trace and span IDs
 
-Enable either or both settings to include existing `System.Diagnostics.Activity`
-context in LogThis events:
+LogThis can include identifiers from the current W3C
+`System.Diagnostics.Activity`. This connects method events to an existing
+distributed trace without creating or managing tracing itself:
 
 ```csharp
 builder.Services.AddLogThisConfiguration(options =>
@@ -792,7 +800,7 @@ builder.Services.AddLogThisConfiguration(options =>
 });
 ```
 
-The same settings work in JSON and named profiles:
+The same options can be configured through JSON or named profiles:
 
 ```json
 {
@@ -803,50 +811,18 @@ The same settings work in JSON and named profiles:
 }
 ```
 
-Both default to `false` and are independent: a provider or application may already
-supply one identifier. Trace IDs group a distributed operation; span IDs identify
-individual operations within it. Ordinary method calls do not automatically
-create spans. These settings only include existing context; they do not create
-tracing, start or stop activities, or change sampling or exporters.
+Both options default to `false` and work independently. `LogThisTraceId`
+contains the complete 32-character hexadecimal trace ID, while
+`LogThisSpanId` contains the complete 16-character hexadecimal span ID. The
+selected method profile determines which fields are included.
 
-For each eligible event, LogThis reads `Activity.Current` once and uses that
-activity for both fields. The selected profile determines which fields appear.
-`LogThisTraceId` contains the complete 32-character hexadecimal trace ID, and
-`LogThisSpanId` contains the complete 16-character hexadecimal span ID. With
-component labels enabled, their labels are `Trace ID:` and `Span ID:`; disabling
-labels leaves the same structured names and values. Both names are reserved for
-LogThis, even when disabled.
+LogThis reads `Activity.Current` for each eligible event. Nested activities and
+async flows therefore use the activity that is current when the event occurs.
+Missing, non-W3C, or invalid identifiers are omitted.
 
-Missing, non-W3C, or invalid identifiers are omitted without replacement IDs or
-absence diagnostics. Activity context follows its normal async flow. If application
-code creates a nested activity, events use its current span and return to the
-parent's span after that activity ends. LogThis correlation IDs remain independent
-and retain their existing lazy generation and operation-chain lifetime.
-
-Method exclusions leave activity context intact:
-
-```csharp
-[LogThis]
-public class OrderService
-{
-    [DontLogThis]
-    public void Submit()
-    {
-        Validate();
-    }
-
-    public void Validate() { }
-}
-```
-
-`Submit` emits no generated events. `Validate` still emits its configured events
-with the existing activity identifiers when enabled. Neither method creates a
-span through LogThis. Explicit application logs are not enriched by this feature.
-
-Custom `ILogThisConfiguration` implementations must add `LogTraceId` and
-`LogSpanId`. Existing applications using `LogThisConfiguration` keep their current
-output unless these settings are enabled. Context must already be supplied by the
-application or its instrumentation; no tracing service is required by LogThis.
+These options do not create activities or spans, change sampling or exporters,
+or enrich explicit application logs. They are independent of the generated
+LogThis correlation ID.
 
 ### Optional method duration
 

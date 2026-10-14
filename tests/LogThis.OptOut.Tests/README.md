@@ -62,3 +62,12 @@ Property inheritance checks cover unchanged inherited declarations, annotated
 and unannotated overrides, new hiding properties, concrete overrides of abstract
 properties, selected-profile replacements, skipped throwing getters, and
 exclusion/configured-name masking on overrides.
+
+Return masking checks cover configured/profile and literal replacements, empty
+and null results, untouched objects and collections, awaited completion,
+ValueTask results, exclusions, unannotated overrides, disabled capture/events,
+level filtering, and unchanged exception propagation. Build-only diagnostic
+fixtures can be enabled with `-p:ReturnMaskDiagnosticMode=DIAGNOSTICS` (three
+`LOGTHIS002` warnings) or `-p:ReturnMaskDiagnosticMode=NULL` (two `LOGTHIS001`
+errors) when building this project. Run the normal suite afterward without these
+symbols. Direct constructor null validation is included in the runtime checks.

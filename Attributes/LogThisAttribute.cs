@@ -2,6 +2,7 @@ using LogThis.Entities;
 using Metalama.Framework.Advising;
 using Metalama.Framework.Aspects;
 using Metalama.Framework.Code;
+using Metalama.Framework.Diagnostics;
 
 namespace LogThis.Attributes;
 
@@ -12,6 +13,15 @@ namespace LogThis.Attributes;
 [AttributeUsage(validOn: AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
 public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
 {
+    #region Private Fields
+
+    private static readonly DiagnosticDefinition NullReturnMask = new("LOGTHIS001", Severity.Error,
+        "MaskReturnInLogs replacement cannot be null. Omit the argument to use JsonMaskValue.");
+    private static readonly DiagnosticDefinition NoReturnToMask = new("LOGTHIS002", Severity.Warning,
+        "MaskReturnInLogs has no usable result to mask on this method. Logging remains unchanged.");
+
+    #endregion
+
     #region Constructor
 
     /// <summary>Creates an aspect that uses async templates for awaitable methods.</summary>
@@ -49,6 +59,7 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
                 !method.Attributes.OfAttributeType(typeof(DontLogThisAttribute)).Any() &&
                 !method.Attributes.OfAttributeType(typeof(LogThisAttribute)).Any())
             {
+                ValidateReturnMask(builder.With(method));
                 builder.With(method).Override(templates);
             }
         }
@@ -64,6 +75,7 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
             return;
         }
 
+        ValidateReturnMask(builder);
         base.BuildAspect(builder);
     }
 
@@ -87,7 +99,7 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
         {
             // Await so exit and exception events reflect the eventual outcome.
             dynamic? result = await meta.ProceedAsync();
-            LogThisRuntimeLogger.Exit(context, result, LogThisRuntimeLogger.FinishDuration(durationStart));
+            LogExit(context, result, LogThisRuntimeLogger.FinishDuration(durationStart));
             return result;
         }
         catch (Exception exception)
@@ -116,7 +128,7 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
         try
         {
             dynamic? result = meta.Proceed();
-            LogThisRuntimeLogger.Exit(context, result, LogThisRuntimeLogger.FinishDuration(durationStart));
+            LogExit(context, result, LogThisRuntimeLogger.FinishDuration(durationStart));
             return result;
         }
         catch (Exception exception)
@@ -129,6 +141,32 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
     #endregion
 
     #region Private Methods
+
+    /// <summary>Reports declaration-local return-mask diagnostics for instrumented methods.</summary>
+    [CompileTime]
+    private static void ValidateReturnMask(IAspectBuilder<IMethod> builder)
+    {
+        var mask = builder.Target.Attributes.OfAttributeType(typeof(MaskReturnInLogsAttribute)).SingleOrDefault();
+        if (mask == null) return;
+        if (mask.ConstructorArguments.Length != 0 && mask.ConstructorArguments[0].Value == null)
+            builder.Diagnostics.Report(NullReturnMask);
+        if (builder.Target.GetAsyncInfo().ResultType.SpecialType == SpecialType.Void)
+            builder.Diagnostics.Report(NoReturnToMask);
+    }
+
+    /// <summary>Passes only replacement metadata to the logger when the result is masked.</summary>
+    [Template]
+    private void LogExit(LogThisMethodContext context, dynamic? result, double? durationMs)
+    {
+        var mask = meta.Target.Method.Attributes.OfAttributeType(typeof(MaskReturnInLogsAttribute)).SingleOrDefault();
+        if (mask != null && meta.Target.Method.GetAsyncInfo().ResultType.SpecialType != SpecialType.Void)
+        {
+            var replacement = meta.CompileTime(mask.ConstructorArguments.Length == 0 ? null : (string?)mask.ConstructorArguments[0].Value);
+            LogThisRuntimeLogger.ExitMasked(context, replacement, durationMs);
+        }
+        else
+            LogThisRuntimeLogger.Exit(context, result, durationMs);
+    }
 
     // The compile-time loop emits value reads only for included, unmasked parameters.
     [Template]

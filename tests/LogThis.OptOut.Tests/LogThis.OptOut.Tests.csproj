@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <DefineConstants Condition="'$(ReturnMaskDiagnosticMode)' != ''">$(DefineConstants);RETURN_MASK_$(ReturnMaskDiagnosticMode)</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../LogThis.NET.csproj" />

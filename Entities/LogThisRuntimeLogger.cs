@@ -20,6 +20,8 @@ public static class LogThisRuntimeLogger
     /// <param name="returnValue">Result to log on exit, when configured.</param>
     /// <param name="exception">Exception associated with the event, if any.</param>
     /// <param name="durationMs">Elapsed milliseconds, or null when timing is disabled.</param>
+    /// <param name="maskReturn">Whether the successful result is replaced without capture.</param>
+    /// <param name="returnReplacement">Literal replacement, or null for the configured mask.</param>
     private static void Write(
         LogThisRuntime runtime,
         IAccessPointConfiguration accessPoint,
@@ -27,7 +29,9 @@ public static class LogThisRuntimeLogger
         object?[]? arguments,
         object? returnValue,
         Exception? exception,
-        double? durationMs = null)
+        double? durationMs = null,
+        bool maskReturn = false,
+        string? returnReplacement = null)
     {
         try
         {
@@ -42,7 +46,9 @@ public static class LogThisRuntimeLogger
             string? capturedArguments = arguments != null && configuration.LogMethodArguments
                 ? LogThisValueMasker.MaskArguments(context) : null;
             string? capturedReturn = (arguments == null || exception != null) && configuration.LogMethodReturnValue
-                ? exception != null ? "" : LogThisValueMasker.MaskObject(returnValue) : null;
+                ? exception != null ? "" : maskReturn
+                    ? new Newtonsoft.Json.Linq.JValue(returnReplacement ?? configuration.JsonMaskValue).ToString(Newtonsoft.Json.Formatting.None)
+                    : LogThisValueMasker.MaskObject(returnValue) : null;
             LogParameters parameters = new(configuration.MessageDelimeter);
 
             string accessPointLabel = ReferenceEquals(accessPoint, configuration.OnEntryConfig)
@@ -235,6 +241,18 @@ public static class LogThisRuntimeLogger
         {
             Write(runtime, runtime.Configuration.OnExitConfig, context, null, returnValue, null, durationMs);
         }
+    }
+
+    /// <summary>Emits a successful exit with a replacement result, without receiving the application result.</summary>
+    /// <param name="context">Method metadata and arguments.</param>
+    /// <param name="replacement">Literal replacement, or null to use the selected profile's JsonMaskValue.</param>
+    /// <param name="durationMs">Elapsed milliseconds, or null when disabled.</param>
+    /// <remarks>Event, level, and return-capture settings still apply. Intended for generated aspect code.</remarks>
+    public static void ExitMasked(LogThisMethodContext context, string? replacement, double? durationMs)
+    {
+        LogThisRuntime? runtime = LogThisRuntimeContext.Current;
+        if (runtime != null)
+            Write(runtime, runtime.Configuration.OnExitConfig, context, null, null, null, durationMs, true, replacement);
     }
 
     #endregion
