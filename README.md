@@ -501,6 +501,29 @@ An explicitly null replacement is invalid. Applying the attribute to a method
 without a usable result, such as `void`, `Task`, or `ValueTask`, has no effect
 and produces a build warning.
 
+### Attribute warnings
+
+Metalama reports invalid or ineffective attribute combinations during the
+consumer build:
+
+| ID | Severity | Condition | Resolution |
+| --- | --- | --- | --- |
+| `LOGTHIS001` | Error | `[MaskReturnInLogs(null)]` supplies an explicit null replacement. | Omit the argument to use `JsonMaskValue`, or provide a string. |
+| `LOGTHIS002` | Warning | `[MaskReturnInLogs]` targets a method without a usable result. | Remove the attribute or return a value that can be captured. |
+| `LOGTHIS003` | Warning | A method has both `[LogThis]` and `[DontLogThis]`. | Remove the ineffective `[LogThis]`, or remove the exclusion. |
+| `LOGTHIS004` | Warning | A method has both `[MaskReturnInLogs]` and `[DontLogThis]`. | Remove the ineffective mask, or remove the exclusion. |
+| `LOGTHIS005` | Warning | A parameter or property has both `[MaskThisInLogs]` and `[DontLogThis]`. | Remove the ineffective mask, or remove the exclusion. |
+| `LOGTHIS006` | Warning | A method repeats the profile already selected by its `[LogThis]` class. | Remove the method attribute, or select a different profile. |
+
+`[DontLogThis]` remains authoritative when conflicting attributes are present.
+Class-level `[LogThis]` with method-level `[DontLogThis]` is a supported
+opt-out and does not itself produce a warning.
+
+Profile names are trimmed and compared case-insensitively when checking for a
+redundant method selection. A method may still override a named class profile by
+explicitly selecting the default or a different profile. Applications can
+suppress or promote these diagnostics through their normal compiler settings.
+
 ## Sensitive-data masking
 
 Use `JsonFieldsToMask` for models that cannot be annotated, or to apply a
