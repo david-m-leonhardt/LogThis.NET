@@ -248,7 +248,7 @@ LogThis.NET provides three attributes with distinct purposes:
 
 - `[LogThis]` enables method-boundary logging.
 - `[DontLogThis]` excludes a method or captured value.
-- `[MaskThisInLogs]` replaces a captured property value with safe text.
+- `[MaskThisInLogs]` replaces a captured parameter or property value with safe text.
 
 ### `[LogThis]`
 
@@ -405,6 +405,43 @@ JSON key after rebuilding.
 
 ### `[MaskThisInLogs]`
 
+Use the attribute on a parameter to retain its name while replacing its entire
+logged value:
+
+```csharp
+[LogThis]
+public void Authenticate(
+    [MaskThisInLogs] string password,
+    [MaskThisInLogs("[TOKEN]")] string token)
+{
+    // Application code still receives the original password and token.
+}
+```
+
+With argument capture enabled and the default mask, the argument component is:
+
+```text
+Arguments: {"password":"*****","token":"[TOKEN]"}
+```
+
+Without a replacement, parameter masking uses the selected profile's
+`JsonMaskValue`. A supplied literal, including an empty string, remains fixed.
+Nulls, objects, and collections are replaced without inspecting or serializing
+their contents. `[DontLogThis]` takes precedence and omits the parameter's name
+and value entirely. Masks apply to entry and exception argument capture and do
+not enable disabled capture or events.
+
+Parameter masking changes only that method's captured arguments. It does not
+follow values into return capture or other method calls, and it does not change
+application arguments, results, or exceptions. Property masking continues to apply
+wherever an object is captured. `JsonFieldsToMask` continues matching property
+names, not parameter names.
+
+The attribute supports parameters and properties only.
+Explicitly null replacements are rejected. Invalid parameter replacements are
+reported during weaving; omit the constructor argument to use `JsonMaskValue`.
+Rebuild consumers to weave parameter masking support.
+
 Use `[MaskThisInLogs]` on a model property that may be captured but should not
 expose its value:
 
@@ -432,6 +469,33 @@ or sanitize explicit application logs and exception messages.
 `[DontLogThis]` takes precedence and omits the property. An explicit
 `[MaskThisInLogs("...")]` value takes precedence over configuration-based
 masking.
+
+Property masking requires an annotation on each declaration. An unchanged
+inherited property keeps its masking. An override, including a concrete override
+of an annotated abstract property, or a `new` hiding property requires its own
+`[MaskThisInLogs]`.
+
+```csharp
+public class BaseModel
+{
+    [MaskThisInLogs] public string Password { get; init; } = "";
+    [MaskThisInLogs] public virtual string Secret => "base";
+    [MaskThisInLogs] public string Token => "base";
+}
+
+public class DerivedModel : BaseModel
+{
+    // Password is inherited unchanged and remains masked.
+    public override string Secret => "derived"; // Eligible for capture.
+    [MaskThisInLogs("[TOKEN]")] public new string Token => "derived";
+}
+```
+
+Unannotated overrides and hiding properties remain eligible for capture unless
+another exclusion or configuration-based masking rule applies. Annotate the
+override itself to mask it. Each annotated property uses its explicit replacement
+or the selected profile's `JsonMaskValue`, without invoking its getter. These
+inheritance rules document existing behavior; they do not change capture behavior.
 
 ## Sensitive-data masking
 

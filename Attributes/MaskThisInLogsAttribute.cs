@@ -1,13 +1,31 @@
 namespace LogThis.Attributes;
 
-/// <summary>Replaces an entire property value in LogThis captures without invoking its getter.</summary>
+/// <summary>Replaces an entire parameter or property value in LogThis captures without inspecting its contents.</summary>
 /// <remarks>
 /// Applies to ordinary properties serialized by LogThis, including nested objects and collection items.
 /// DontLogThis takes precedence. An explicit replacement overrides configured name masking; otherwise
 /// JsonMaskValue is used. Null-valued properties also receive the replacement without being read.
 /// Does not modify application objects, explicit application logs, or exception-message text.
+/// Parameter masks retain the parameter name on entry and exception events. They do not follow
+/// values into return capture or other calls. Property masks skip getters.
+/// An unchanged inherited property retains its annotation. Overrides (including implementations
+/// of abstract properties) and new hiding properties require their own annotation. Unannotated
+/// overrides remain eligible for capture unless excluded or matched by configured name masking.
+/// Annotated declarations use their explicit replacement or the selected profile's JsonMaskValue.
 /// </remarks>
-[AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
+/// <example>
+/// <code>
+/// public class BaseModel
+/// {
+///     [MaskThisInLogs] public virtual string Secret => "base";
+/// }
+/// public class DerivedModel : BaseModel
+/// {
+///     [MaskThisInLogs("[PRIVATE]")] public override string Secret => "derived";
+/// }
+/// </code>
+/// </example>
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
 public sealed class MaskThisInLogsAttribute : Attribute
 {
     #region Constructors
@@ -16,7 +34,7 @@ public sealed class MaskThisInLogsAttribute : Attribute
     public MaskThisInLogsAttribute() { }
 
     /// <summary>Uses a fixed replacement, including an empty string if supplied.</summary>
-    /// <param name="replacement">Replacement for the entire property value.</param>
+    /// <param name="replacement">Replacement for the entire parameter or property value.</param>
     /// <exception cref="ArgumentNullException">The explicit replacement is null.</exception>
     public MaskThisInLogsAttribute(string replacement)
     {

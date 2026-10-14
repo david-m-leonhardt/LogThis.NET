@@ -23,7 +23,7 @@
         {
             Dictionary<string, object> prepared = [];
             foreach (KeyValuePair<string, object> component in components)
-                prepared.Add(LogThis.Extensions.StringExtensions.PrepComponentName(component.Key), component.Value);
+                prepared.Add(Extensions.StringExtensions.PrepComponentName(component.Key), component.Value);
             return prepared;
         }
 

@@ -17,7 +17,7 @@ public static class MaskingChecks
         try { _ = new MaskThisInLogsAttribute(null!); throw new Exception("Null replacement accepted."); }
         catch (ArgumentNullException exception) when (exception.ParamName == "replacement") { }
         var usage = (AttributeUsageAttribute)Attribute.GetCustomAttribute(typeof(MaskThisInLogsAttribute), typeof(AttributeUsageAttribute))!;
-        Check(usage.ValidOn == AttributeTargets.Property, "Mask attribute targets changed.");
+        Check(usage.ValidOn == (AttributeTargets.Property | AttributeTargets.Parameter) && !usage.Inherited, "Mask attribute targets or inheritance changed.");
         var payload = new MaskPayload();
         var sample = new MaskSample();
         var sink = new CorrelationLogger();

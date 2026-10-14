@@ -24,7 +24,9 @@ internal static class LogThisValueMasker
         foreach (KeyValuePair<string, object?> argument in context.NamedArguments)
         {
             // Mask each value before adding its parameter name, preserving property-based masking semantics.
-            arguments.Add(argument.Key, MaskJson(argument.Value));
+            arguments.Add(argument.Key, argument.Value is LogThisMethodContext.MaskedArgument masked
+                ? new JValue(masked.Replacement ?? LogThisRuntimeContext.Current!.Configuration.JsonMaskValue)
+                : MaskJson(argument.Value));
         }
 
         return arguments.ToString(Formatting.None);

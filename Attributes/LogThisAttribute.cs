@@ -130,7 +130,7 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
 
     #region Private Methods
 
-    // The compile-time loop emits reads only for included parameters.
+    // The compile-time loop emits value reads only for included, unmasked parameters.
     [Template]
     private void CaptureArguments(List<KeyValuePair<string, object?>> arguments)
     {
@@ -138,11 +138,30 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
         {
             if (!parameter.Attributes.OfAttributeType(typeof(DontLogThisAttribute)).Any())
             {
-                arguments.Add(new KeyValuePair<string, object?>(
-                    parameter.Name, parameter.RefKind == RefKind.Out ? null : parameter.Value));
+                var mask = parameter.Attributes.OfAttributeType(typeof(MaskThisInLogsAttribute)).SingleOrDefault();
+                if (mask != null)
+                {
+                    // Only metadata is captured: the original parameter is never read for logging.
+                    if (mask.ConstructorArguments.Length == 0)
+                        arguments.Add(new KeyValuePair<string, object?>(parameter.Name, LogThisMethodContext.CreateMaskedArgument()));
+                    else
+                    {
+                        var replacement = meta.CompileTime(GetMaskReplacement(mask));
+                        arguments.Add(new KeyValuePair<string, object?>(parameter.Name, LogThisMethodContext.CreateMaskedArgument(replacement)));
+                    }
+                }
+                else
+                    arguments.Add(new KeyValuePair<string, object?>(
+                        parameter.Name, parameter.RefKind == RefKind.Out ? null : parameter.Value));
             }
         }
     }
+
+    /// <summary>Validates literal parameter replacements while weaving, not while application code runs.</summary>
+    [CompileTime]
+    private static string GetMaskReplacement(IAttribute mask)
+        => (string?)mask.ConstructorArguments[0].Value
+            ?? throw new ArgumentException("MaskThisInLogs replacement cannot be null. Omit the argument to use JsonMaskValue.");
 
     #endregion
 }

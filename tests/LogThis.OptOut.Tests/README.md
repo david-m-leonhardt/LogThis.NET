@@ -52,3 +52,13 @@ all trace/span setting combinations, labels and complete structured values,
 default/named configuration, missing and hierarchical context, awaits, nested
 activities, concurrent contexts, method exclusions, filters, and provider failures.
 The reservation matrix includes both activity property names.
+
+Parameter masking checks cover configured/profile and literal masks, names/order,
+null and empty values, whole objects and collections without inspection,
+exclusion precedence, entry/exception capture, disabled events, ref/out values,
+and masks not following values into returns or child calls.
+
+Property inheritance checks cover unchanged inherited declarations, annotated
+and unannotated overrides, new hiding properties, concrete overrides of abstract
+properties, selected-profile replacements, skipped throwing getters, and
+exclusion/configured-name masking on overrides.
