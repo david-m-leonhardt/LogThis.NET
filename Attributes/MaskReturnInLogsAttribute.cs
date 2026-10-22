@@ -18,7 +18,7 @@ namespace LogThis.Attributes;
 /// </code>
 /// </example>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-public sealed class MaskReturnInLogsAttribute : Attribute
+public sealed class MaskReturnInLogsAttribute : MaskInLogsAttribute
 {
     #region Constructors
 
@@ -28,18 +28,7 @@ public sealed class MaskReturnInLogsAttribute : Attribute
     /// <summary>Uses a fixed replacement, including an empty string.</summary>
     /// <param name="replacement">Replacement for the entire logged result.</param>
     /// <exception cref="ArgumentNullException">The explicit replacement is null.</exception>
-    public MaskReturnInLogsAttribute(string replacement)
-    {
-        ArgumentNullException.ThrowIfNull(replacement);
-        Replacement = replacement;
-    }
-
-    #endregion
-
-    #region Public Properties
-
-    /// <summary>Gets the literal replacement, or null to use the selected profile's JsonMaskValue.</summary>
-    public string? Replacement { get; }
+    public MaskReturnInLogsAttribute(string replacement) : base(replacement) { }
 
     #endregion
 }

@@ -18,9 +18,13 @@ internal static class LogThisValueMasker
     /// <returns>A JSON object of names and masked values, or a legacy positional list.</returns>
     internal static string MaskArguments(LogThisMethodContext context)
     {
-        if (context.NamedArguments == null) return MaskObjects(context.Arguments);
+        if (context.NamedArguments == null)
+        {
+            return MaskObjects(context.Arguments);
+        }
 
-        JObject arguments = new();
+        JObject arguments = [];
+
         foreach (KeyValuePair<string, object?> argument in context.NamedArguments)
         {
             // Mask each value before adding its parameter name, preserving property-based masking semantics.
@@ -39,6 +43,7 @@ internal static class LogThisValueMasker
     {
         // Method arguments are individually serialized inside one display list.
         List<string> masked = [];
+
         foreach (object? value in values)
         {
             masked.Add(MaskObject(value));
@@ -59,10 +64,14 @@ internal static class LogThisValueMasker
     {
         LogThisRuntime runtime = LogThisRuntimeContext.Current
             ?? throw new InvalidOperationException("No LogThis scope is active.");
+
         HashSet<string> names = new(runtime.Configuration.JsonFieldsToMask, StringComparer.OrdinalIgnoreCase);
+
         string mask = runtime.Configuration.JsonMaskValue;
+
         // Contracts contain capture-specific masks; never share them across scopes or configurations.
         LogThisContractResolver resolver = new(names, mask);
+
         JToken token = value == null
             ? JValue.CreateNull()
             : JToken.FromObject(value, JsonSerializer.Create(new JsonSerializerSettings
@@ -70,7 +79,9 @@ internal static class LogThisValueMasker
                 NullValueHandling = NullValueHandling.Ignore,
                 ContractResolver = resolver
             }));
+
         MaskToken(token, names, mask, resolver);
+
         return token;
     }
 
@@ -85,7 +96,11 @@ internal static class LogThisValueMasker
         {
             foreach (JProperty property in obj.Properties())
             {
-                if (resolver.IsReplacement(property.Value)) continue;
+                if (resolver.IsReplacement(property.Value))
+                {
+                    continue;
+                }
+
                 if (names.Contains(property.Name))
                 {
                     property.Value = new JValue(mask);

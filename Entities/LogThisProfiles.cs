@@ -5,16 +5,17 @@ namespace LogThis.Entities;
 /// <summary>Holds complete method configurations and their validated custom-component snapshots.</summary>
 internal sealed class LogThisProfiles
 {
-    #region Private Fields
-
-    private readonly Dictionary<string, Selection> profiles = new(StringComparer.OrdinalIgnoreCase);
-
-    #endregion
-
     #region Internal Properties
 
     /// <summary>The operation's default configuration, independent of the current method selection.</summary>
     internal Selection Default { get; }
+
+    #endregion
+
+    #region Private Properties
+
+    // Profile names are normalized before lookup and compared without case sensitivity.
+    private readonly Dictionary<string, Selection> profiles = new(StringComparer.OrdinalIgnoreCase);
 
     #endregion
 
@@ -24,8 +25,16 @@ internal sealed class LogThisProfiles
     internal LogThisProfiles(ILogThisConfiguration configuration, IReadOnlyDictionary<string, ILogThisConfiguration>? named = null)
     {
         Default = Prepare(configuration);
-        if (named == null) return;
-        foreach (var entry in named) profiles.Add(NormalizeName(entry.Key), Prepare(entry.Value));
+
+        if (named == null)
+        {
+            return;
+        }
+
+        foreach (KeyValuePair<string, ILogThisConfiguration> entry in named)
+        {
+            profiles.Add(NormalizeName(entry.Key), Prepare(entry.Value));
+        }
     }
 
     #endregion
@@ -35,8 +44,13 @@ internal sealed class LogThisProfiles
     /// <summary>Selects a whole configuration; null explicitly selects the default.</summary>
     internal Selection Select(string? name)
     {
-        if (name == null) return Default;
+        if (name == null)
+        {
+            return Default;
+        }
+
         string normalized = NormalizeName(name);
+
         return profiles.TryGetValue(normalized, out Selection? selection)
             ? selection
             : throw new InvalidOperationException($"LogThis profile '{name}' is not registered. Register it with AddLogThisProfile or LogThis:Profiles, or correct the attribute's Profile name.");
@@ -53,6 +67,7 @@ internal sealed class LogThisProfiles
 
     #region Private Methods
 
+    /// <summary>Pairs configuration with a validated snapshot of custom components for the scope lifetime.</summary>
     private static Selection Prepare(ILogThisConfiguration configuration)
         => new(configuration, LogParameters.PrepareComponents(configuration.MessageComponents));
 

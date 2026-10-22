@@ -44,7 +44,7 @@ internal sealed class LogThisScopeFactory(
 
         LogThisRuntime? previous = LogThisRuntimeContext.Current;
         // Share even uninitialized or failed state; opening a scope never invokes the generator.
-        var correlation = previous?.Correlation ?? new LogThisRuntimeContext.CorrelationState(generateId);
+        LogThisRuntimeContext.CorrelationState correlation = previous?.Correlation ?? new LogThisRuntimeContext.CorrelationState(generateId);
 
         LogThisRuntime runtime = new(
             loggerFactory.CreateLogger(categoryName),

@@ -11,7 +11,7 @@ namespace LogThis.Entities;
 /// <param name="mask">Configured replacement for this capture.</param>
 internal sealed class LogThisContractResolver(HashSet<string> names, string mask) : DefaultContractResolver
 {
-    #region Private Fields
+    #region Private Properties
 
     // Token identity preserves explicit replacements during the dictionary/JSON fallback pass.
     private readonly HashSet<JToken> replacements = new(ReferenceEqualityComparer.Instance);

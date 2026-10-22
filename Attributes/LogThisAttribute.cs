@@ -1,8 +1,8 @@
 using LogThis.Entities;
+using LogThis.Constants;
 using Metalama.Framework.Advising;
 using Metalama.Framework.Aspects;
 using Metalama.Framework.Code;
-using Metalama.Framework.Diagnostics;
 
 namespace LogThis.Attributes;
 
@@ -13,15 +13,6 @@ namespace LogThis.Attributes;
 [AttributeUsage(validOn: AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
 public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
 {
-    #region Private Fields
-
-    private static readonly DiagnosticDefinition NullReturnMask = new("LOGTHIS001", Severity.Error,
-        "MaskReturnInLogs replacement cannot be null. Omit the argument to use JsonMaskValue.");
-    private static readonly DiagnosticDefinition NoReturnToMask = new("LOGTHIS002", Severity.Warning,
-        "MaskReturnInLogs has no usable result to mask on this method. Logging remains unchanged.");
-
-    #endregion
-
     #region Constructor
 
     /// <summary>Creates an aspect that uses async templates for awaitable methods.</summary>
@@ -83,7 +74,7 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
     /// <returns>The original method's result after it completes, if any.</returns>
     public override async Task<dynamic?> OverrideAsyncMethod()
     {
-        using var profileScope = LogThisRuntimeLogger.SelectProfile(meta.CompileTime(Profile));
+        using IDisposable? profileScope = LogThisRuntimeLogger.SelectProfile(meta.CompileTime(Profile));
         List<KeyValuePair<string, object?>> arguments = [];
         CaptureArguments(arguments);
         LogThisMethodContext context = LogThisMethodContext.FromNamedArguments(
@@ -113,7 +104,7 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
     /// <returns>The original method's result, if any.</returns>
     public override dynamic? OverrideMethod()
     {
-        using var profileScope = LogThisRuntimeLogger.SelectProfile(meta.CompileTime(Profile));
+        using IDisposable? profileScope = LogThisRuntimeLogger.SelectProfile(meta.CompileTime(Profile));
         List<KeyValuePair<string, object?>> arguments = [];
         CaptureArguments(arguments);
         LogThisMethodContext context = LogThisMethodContext.FromNamedArguments(
@@ -142,32 +133,6 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
 
     #region Private Methods
 
-    /// <summary>Reports declaration-local return-mask diagnostics for instrumented methods.</summary>
-    [CompileTime]
-    private static void ValidateReturnMask(IAspectBuilder<IMethod> builder)
-    {
-        var mask = builder.Target.Attributes.OfAttributeType(typeof(MaskReturnInLogsAttribute)).SingleOrDefault();
-        if (mask == null) return;
-        if (mask.ConstructorArguments.Length != 0 && mask.ConstructorArguments[0].Value == null)
-            builder.Diagnostics.Report(NullReturnMask);
-        if (builder.Target.GetAsyncInfo().ResultType.SpecialType == SpecialType.Void)
-            builder.Diagnostics.Report(NoReturnToMask);
-    }
-
-    /// <summary>Passes only replacement metadata to the logger when the result is masked.</summary>
-    [Template]
-    private void LogExit(LogThisMethodContext context, dynamic? result, double? durationMs)
-    {
-        var mask = meta.Target.Method.Attributes.OfAttributeType(typeof(MaskReturnInLogsAttribute)).SingleOrDefault();
-        if (mask != null && meta.Target.Method.GetAsyncInfo().ResultType.SpecialType != SpecialType.Void)
-        {
-            var replacement = meta.CompileTime(mask.ConstructorArguments.Length == 0 ? null : (string?)mask.ConstructorArguments[0].Value);
-            LogThisRuntimeLogger.ExitMasked(context, replacement, durationMs);
-        }
-        else
-            LogThisRuntimeLogger.Exit(context, result, durationMs);
-    }
-
     // The compile-time loop emits value reads only for included, unmasked parameters.
     [Template]
     private void CaptureArguments(List<KeyValuePair<string, object?>> arguments)
@@ -176,7 +141,7 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
         {
             if (!parameter.Attributes.OfAttributeType(typeof(DontLogThisAttribute)).Any())
             {
-                var mask = parameter.Attributes.OfAttributeType(typeof(MaskThisInLogsAttribute)).SingleOrDefault();
+                IAttribute? mask = parameter.Attributes.OfAttributeType(typeof(MaskThisInLogsAttribute)).SingleOrDefault();
                 if (mask != null)
                 {
                     // Only metadata is captured: the original parameter is never read for logging.
@@ -184,13 +149,15 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
                         arguments.Add(new KeyValuePair<string, object?>(parameter.Name, LogThisMethodContext.CreateMaskedArgument()));
                     else
                     {
-                        var replacement = meta.CompileTime(GetMaskReplacement(mask));
+                        string replacement = meta.CompileTime(GetMaskReplacement(mask));
                         arguments.Add(new KeyValuePair<string, object?>(parameter.Name, LogThisMethodContext.CreateMaskedArgument(replacement)));
                     }
                 }
                 else
+                {
                     arguments.Add(new KeyValuePair<string, object?>(
                         parameter.Name, parameter.RefKind == RefKind.Out ? null : parameter.Value));
+                }
             }
         }
     }
@@ -200,6 +167,44 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
     private static string GetMaskReplacement(IAttribute mask)
         => (string?)mask.ConstructorArguments[0].Value
             ?? throw new ArgumentException("MaskThisInLogs replacement cannot be null. Omit the argument to use JsonMaskValue.");
+
+    /// <summary>Passes only replacement metadata to the logger when the result is masked.</summary>
+    [Template]
+    private void LogExit(LogThisMethodContext context, dynamic? result, double? durationMs)
+    {
+        IAttribute? mask = meta.Target.Method.Attributes.OfAttributeType(typeof(MaskReturnInLogsAttribute)).SingleOrDefault();
+        if (mask != null && meta.Target.Method.GetAsyncInfo().ResultType.SpecialType != SpecialType.Void)
+        {
+            var replacement = meta.CompileTime(mask.ConstructorArguments.Length == 0 ? null : (string?)mask.ConstructorArguments[0].Value);
+            LogThisRuntimeLogger.ExitMasked(context, replacement, durationMs);
+        }
+        else
+        {
+            LogThisRuntimeLogger.Exit(context, result, durationMs);
+        }
+    }
+
+    /// <summary>Reports declaration-local return-mask diagnostics for instrumented methods.</summary>
+    [CompileTime]
+    private static void ValidateReturnMask(IAspectBuilder<IMethod> builder)
+    {
+        IAttribute? mask = builder.Target.Attributes.OfAttributeType(typeof(MaskReturnInLogsAttribute)).SingleOrDefault();
+
+        if (mask == null)
+        {
+            return;
+        }
+
+        if (mask.ConstructorArguments.Length != 0 && mask.ConstructorArguments[0].Value == null)
+        {
+            builder.Diagnostics.Report(LogThisDiagnostics.NullReturnMask);
+        }
+
+        if (builder.Target.GetAsyncInfo().ResultType.SpecialType == SpecialType.Void)
+        {
+            builder.Diagnostics.Report(LogThisDiagnostics.NoReturnToMask);
+        }
+    }
 
     #endregion
 }

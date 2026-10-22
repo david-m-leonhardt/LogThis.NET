@@ -244,7 +244,7 @@ active scope do not produce LogThis events.
 
 ## Attributes
 
-LogThis.NET provides four attributes with distinct purposes:
+LogThis.NET provides four consumer-facing attributes:
 
 - `[LogThis]` enables method-boundary logging.
 - `[DontLogThis]` excludes a method or captured value.
@@ -681,10 +681,10 @@ builder.Services.AddLogThisProfile("ExternalCall", new LogThisConfiguration
 });
 ```
 
-A callback is applied after a matching JSON profile; without matching JSON, it
-starts from library defaults. Passing a `LogThisConfiguration` instance supplies
-the complete profile instead. Names are trimmed and matched case-insensitively.
-Empty names and duplicate code definitions are rejected.
+A callback extends a matching JSON profile, or starts from library defaults
+when no matching JSON exists. Passing a `LogThisConfiguration` instance supplies
+the complete profile. Names are trimmed and matched case-insensitively; empty
+names and duplicate code definitions are rejected.
 
 Select a profile on the class or method:
 
@@ -710,9 +710,9 @@ method attribute without `Profile` selects the default configuration.
 `[DontLogThis]` always takes precedence, and profile selections are never
 merged.
 
-The selected profile controls events, levels, duration, labels, captured values,
-masking, custom components, and diagnostics. `[MaskThisInLogs]` without an
-explicit replacement uses that profile's `JsonMaskValue`.
+The selected profile controls all logging and masking options.
+`[MaskThisInLogs]` without an explicit replacement uses that profile's
+`JsonMaskValue`.
 
 Profiles are validated when the scope factory is first resolved. An unknown
 profile throws `InvalidOperationException` when its method is called inside an
@@ -743,13 +743,14 @@ active LogThis scope; LogThis does not silently fall back to the default.
 - `LogLevel` to select its severity
 - `AccessPointMessage` to change its message
 
+Custom `IAccessPointConfiguration` implementations must return the appropriate
+entry, exit, or exception `EventKind`.
+
 ### Component labels and access-point messages
 
-`LogComponentLabels` defaults to `true`. Set `options.LogComponentLabels = false`
-in the registration callback, or `"LogComponentLabels": false` in the `LogThis`
-configuration section, to omit descriptive component labels. It controls labels
-such as `Class:`, `Method:`, `Arguments:`, `Return value:`, `Duration ms:`,
-`Correlation ID:`, `Trace ID:`, and `Span ID:`.
+`LogComponentLabels` defaults to `true` and controls descriptive text such as
+`Class:`, `Method:`, `Arguments:`, and `Duration ms:`. Set it to `false` in code
+or JSON to omit these labels.
 
 `LogComponentLabels` does not control the access-point message at the beginning
 of an event. Entry, exit, and exception messages remain independently
@@ -764,10 +765,9 @@ Enabled:  Exited | Class: OrderService | Method: SubmitAsync
 Disabled: Exited | OrderService | SubmitAsync
 ```
 
-Disabling labels preserves component order, delimiters, structured property
-names and values, and event selection. Custom components do not receive an
-automatic label. Whole-event formatting, including JSON output, remains the
-logging provider's responsibility.
+Disabling labels does not change component order, delimiters, structured
+properties, or event selection. Custom components receive no automatic label,
+and the logging provider remains responsible for whole-event formatting.
 
 ### Custom component validation and lifetime
 
@@ -779,10 +779,10 @@ properties, regardless of case or whether the related feature is enabled:
 - `LogThisDurationMs`, `LogThisCorrelationId`
 - `LogThisTraceId`, `LogThisSpanId`
 
-Other names, including names such as `LogThisCustom`, `Method`, and
-`CorrelationId`, are allowed. Bare names and single brace-wrapped placeholders
-are normalized. Reserved, duplicate, or malformed names throw an
-`ArgumentException` during addition or configuration resolution.
+These are structured property names, not public constants. Other names,
+including `LogThisCustom`, `Method`, and `CorrelationId`, are allowed. Bare names
+and single brace-wrapped placeholders are normalized; reserved, duplicate, or
+malformed names throw `ArgumentException`.
 
 Configure custom components before the first LogThis scope is created. The scope
 factory takes a shallow snapshot of the dictionary, so later additions, removals,
@@ -791,29 +791,23 @@ or replacements do not affect that service provider's events.
 ### Correlation IDs
 
 Correlation is enabled by default. LogThis generates a 16-character,
-case-sensitive ID when the first enabled event in an operation needs it and adds
-the value to that event as `LogThisCorrelationId`.
-
-Set `options.LogCorrelationId = false` in the configuration callback, or
-`"LogCorrelationId": false` in the default or named profile configuration, to
-omit correlation from those events. Disabled or filtered events do not trigger
-ID generation.
+case-sensitive `LogThisCorrelationId` when the first eligible event needs it.
+Set `LogCorrelationId` to `false` in code or JSON to omit it. Disabled or
+filtered events do not trigger ID generation.
 
 Nested scopes, profile selections, and async continuations share the same
 correlation state. Once generated, enabled events in that operation reuse the
 same ID; independent outermost scopes receive independent IDs.
 
-Only LogThis-generated events are enriched. Explicit application logs are
-unaffected. LogThis does not read incoming headers or derive its correlation ID
-from `Activity.TraceId`. ASP.NET Core middleware opens one scope per request;
-workers should open one scope per job or message when separate correlation
-chains are required.
+Only LogThis-generated events are enriched. The ID is independent of incoming
+headers and `Activity.TraceId`. ASP.NET Core middleware creates one chain per
+request; workers should open one scope per job or message when separate chains
+are required.
 
 ### Activity trace and span IDs
 
-LogThis can include identifiers from the current W3C
-`System.Diagnostics.Activity`. This connects method events to an existing
-distributed trace without creating or managing tracing itself:
+LogThis can add identifiers from the current W3C
+`System.Diagnostics.Activity` to its method events:
 
 ```csharp
 builder.Services.AddLogThisConfiguration(options =>
@@ -823,37 +817,20 @@ builder.Services.AddLogThisConfiguration(options =>
 });
 ```
 
-The same options can be configured through JSON or named profiles:
-
-```json
-{
-  "LogThis": {
-    "LogTraceId": true,
-    "LogSpanId": true
-  }
-}
-```
-
 Both options default to `false` and work independently. `LogThisTraceId`
 contains the complete 32-character hexadecimal trace ID, while
 `LogThisSpanId` contains the complete 16-character hexadecimal span ID. The
-selected method profile determines which fields are included.
-
-LogThis reads `Activity.Current` for each eligible event. Nested activities and
-async flows therefore use the activity that is current when the event occurs.
-Missing, non-W3C, or invalid identifiers are omitted.
-
-These options do not create activities or spans, change sampling or exporters,
-or enrich explicit application logs. They are independent of the generated
-LogThis correlation ID.
+selected method profile determines which fields are included. LogThis reads
+`Activity.Current` for each eligible event and omits missing, non-W3C, or invalid
+identifiers. It does not create activities, change tracing behavior, or enrich
+application-authored logs. These identifiers are independent of
+`LogThisCorrelationId`.
 
 ### Optional method duration
 
-Set `LogMethodDuration = true` in code, or `"LogMethodDuration": true` in the
-`LogThis` configuration section, to add numeric `LogThisDurationMs` to enabled
-exit and exception events. It is disabled by default. Entry events have no
-duration, and enabling timing does not enable a disabled event or change its
-severity.
+Set `LogMethodDuration` to `true` in code or JSON to add numeric
+`LogThisDurationMs` to enabled exit and exception events. It is disabled by
+default and does not enable events or change their severity.
 
 Duration is elapsed milliseconds, including asynchronous waits and child calls,
 measured after entry logging and before completion-event logging. The rendered

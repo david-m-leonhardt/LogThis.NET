@@ -1,4 +1,5 @@
-﻿using LogThis.Interfaces;
+﻿using LogThis.Enum;
+using LogThis.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace LogThis.Entities
@@ -11,6 +12,9 @@ namespace LogThis.Entities
         /// <summary>Text included for this access-point event.</summary>
         /// <value>Empty text until a concrete event supplies its default.</value>
         public virtual string AccessPointMessage { get; set; } = string.Empty;
+
+        /// <inheritdoc />
+        public abstract AccessPointEventKind EventKind { get; }
 
         /// <summary>Whether this access-point event is emitted.</summary>
         /// <value><see langword="true"/> by default.</value>

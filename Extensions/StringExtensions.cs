@@ -11,17 +11,17 @@ namespace LogThis.Extensions
         private static readonly HashSet<string> ReservedNames = new(
             new[]
             {
-                MessageComponentConstants.OnEntryLabel,
-                MessageComponentConstants.OnExitLabel,
-                MessageComponentConstants.OnExceptionLabel,
-                MessageComponentConstants.ClassLabel,
-                MessageComponentConstants.MethodNameLabel,
-                MessageComponentConstants.ArgumentsLabel,
-                MessageComponentConstants.ReturnValueLabel,
-                MessageComponentConstants.DurationMsLabel,
-                MessageComponentConstants.CorrelationIdLabel,
-                MessageComponentConstants.TraceIdLabel,
-                MessageComponentConstants.SpanIdLabel
+                MessageComponents.OnEntryLabel,
+                MessageComponents.OnExitLabel,
+                MessageComponents.OnExceptionLabel,
+                MessageComponents.LogThisClass,
+                MessageComponents.LogThisMethod,
+                MessageComponents.LogThisArguments,
+                MessageComponents.LogThisReturnValue,
+                MessageComponents.LogThisDurationMs,
+                MessageComponents.LogThisCorrelationId,
+                MessageComponents.LogThisTraceId,
+                MessageComponents.LogThisSpanId
             }.Select(placeholder => placeholder[1..^1]), StringComparer.OrdinalIgnoreCase);
 
         #endregion

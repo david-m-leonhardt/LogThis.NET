@@ -84,12 +84,13 @@ internal static class LogThisRuntimeContext
     #region Internal Class
 
     /// <summary>Coordinates one cryptographic generation attempt across all scopes and methods in a chain.</summary>
-    internal sealed class CorrelationState(Func<string> generateId)
+    public sealed class CorrelationState(Func<string> generateId)
     {
         #region Private Fields
 
         // ExecutionAndPublication shares a value or caches a failure, without retrying the generator.
         private readonly Lazy<string> id = new(generateId, LazyThreadSafetyMode.ExecutionAndPublication);
+        // Interlocked access ensures concurrent callers report a failed generation attempt only once.
         private int failureReported;
 
         #endregion
@@ -106,12 +107,18 @@ internal static class LogThisRuntimeContext
         /// <summary>Obtains the shared ID for an eligible event, isolating generation and diagnostic failures.</summary>
         internal string? GetId(ILogThisConfiguration configuration)
         {
-            try { return id.Value; }
+            try
+            {
+                return id.Value;
+            }
             catch (Exception exception)
             {
                 if (Interlocked.Exchange(ref failureReported, 1) == 0)
+                {
                     LogThisRuntimeLogger.ReportFailure(configuration, exception,
                         "LogThis failed while generating a correlation ID.");
+                }
+
                 return null;
             }
         }

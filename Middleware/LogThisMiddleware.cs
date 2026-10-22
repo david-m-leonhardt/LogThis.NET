@@ -3,6 +3,7 @@ using LogThis.Entities;
 using LogThis.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace LogThis.Middleware
 {
@@ -11,7 +12,8 @@ namespace LogThis.Middleware
     {
         #region Private Properties
 
-        private const string sectionKey = "LogThis";
+    /// <summary>Root configuration section used for default settings and named profiles.</summary>
+    private const string sectionKey = "LogThis";
 
         #endregion
 
@@ -29,10 +31,13 @@ namespace LogThis.Middleware
                 RegisterConfiguration(services, provider =>
                 {
                     IConfiguration? appConfiguration = provider.GetService<IConfiguration>();
+
                     LogThisConfiguration options = appConfiguration == null
                         ? new LogThisConfiguration()
                         : BindDefaultConfiguration(appConfiguration.GetSection(sectionKey));
+
                     configure?.Invoke(options);
+
                     return options;
                 });
             }
@@ -47,6 +52,7 @@ namespace LogThis.Middleware
                 ArgumentNullException.ThrowIfNull(section);
 
                 LogThisConfiguration configuration = BindDefaultConfiguration(section);
+
                 RegisterConfiguration(services, _ => configuration, _ => section);
             }
 
@@ -69,6 +75,7 @@ namespace LogThis.Middleware
             public void AddLogThisProfile(string name, Action<LogThisConfiguration> configure)
             {
                 ArgumentNullException.ThrowIfNull(configure);
+
                 RegisterProfile(services, new ProfileDefinition(LogThisProfiles.NormalizeName(name), configure, null));
             }
 
@@ -80,6 +87,7 @@ namespace LogThis.Middleware
             public void AddLogThisProfile(string name, LogThisConfiguration configuration)
             {
                 ArgumentNullException.ThrowIfNull(configuration);
+
                 RegisterProfile(services, new ProfileDefinition(LogThisProfiles.NormalizeName(name), null, configuration));
             }
         }
@@ -93,7 +101,7 @@ namespace LogThis.Middleware
             /// <returns>A scope that restores the previous runtime when disposed.</returns>
             /// <exception cref="InvalidOperationException">LogThis services have not been registered.</exception>
             /// <exception cref="ArgumentException"><paramref name="categoryName"/> is empty or whitespace.</exception>
-            public IDisposable UseLogThis(string categoryName = MessageComponentConstants.DefaultCategoryName)
+            public IDisposable UseLogThis(string categoryName = MessageComponents.DefaultCategoryName)
             {
                 return serviceProvider.GetRequiredService<ILogThisScopeFactory>().BeginScope(categoryName);
             }
@@ -109,19 +117,25 @@ namespace LogThis.Middleware
         private static LogThisConfiguration BindConfiguration(IConfiguration section)
         {
             LogThisConfiguration configuration = new();
+
             section.Bind(configuration, options => options.ErrorOnUnknownConfiguration = true);
+
             Dictionary<string, object> components = new(configuration.MessageComponents);
+
             configuration.MessageComponents.Clear();
+
             configuration.AddMessageComponents(components);
+            
             return configuration;
         }
 
         /// <summary>Binds default settings while excluding the one permitted profiles container.</summary>
         private static LogThisConfiguration BindDefaultConfiguration(IConfigurationSection section)
         {
-            var values = section.AsEnumerable(makePathsRelative: true).Where(entry =>
+            IEnumerable<KeyValuePair<string, string?>> values = section.AsEnumerable(makePathsRelative: true).Where(entry =>
                 !entry.Key.Equals("Profiles", StringComparison.OrdinalIgnoreCase) &&
                 !entry.Key.StartsWith("Profiles:", StringComparison.OrdinalIgnoreCase));
+
             return BindConfiguration(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
         }
 
@@ -130,9 +144,15 @@ namespace LogThis.Middleware
         {
             if (services.Any(descriptor => descriptor.ImplementationInstance is ProfileDefinition existing &&
                 existing.Name.Equals(definition.Name, StringComparison.OrdinalIgnoreCase)))
+            {
                 throw new ArgumentException($"LogThis profile '{definition.Name}' is already registered in code. Use one definition per name.");
+            }
+
             if (!services.Any(descriptor => descriptor.ServiceType == typeof(ILogThisConfiguration)))
+            {
                 services.AddLogThisConfiguration();
+            }
+
             services.AddSingleton(definition);
         }
 
@@ -140,16 +160,27 @@ namespace LogThis.Middleware
         private static LogThisProfiles BuildProfiles(IServiceProvider provider, IConfigurationSection? section)
         {
             Dictionary<string, LogThisConfiguration> named = new(StringComparer.OrdinalIgnoreCase);
+
             IConfigurationSection? container = section?.GetSection("Profiles");
+
             if (container?.Value != null)
+            {
                 throw new ArgumentException("LogThis:Profiles must be a container of named configurations.");
+            }
+
             foreach (IConfigurationSection child in container?.GetChildren() ?? [])
             {
                 string name = LogThisProfiles.NormalizeName(child.Key);
+
                 if (child.Value != null)
+                {
                     throw new ArgumentException($"LogThis profile '{name}' must contain configuration settings.");
+                }
+
                 if (!named.TryAdd(name, BindConfiguration(child)))
+                {
                     throw new ArgumentException($"LogThis profile '{name}' has duplicate JSON definitions after name normalization.");
+                }
             }
             foreach (ProfileDefinition definition in provider.GetServices<ProfileDefinition>())
             {
@@ -158,8 +189,14 @@ namespace LogThis.Middleware
                     named[definition.Name] = definition.Configuration;
                     continue;
                 }
-                if (!named.TryGetValue(definition.Name, out LogThisConfiguration? options)) options = new();
+
+                if (!named.TryGetValue(definition.Name, out LogThisConfiguration? options))
+                {
+                    options = new();
+                }
+
                 definition.Configure!(options);
+
                 named[definition.Name] = options;
             }
             return new LogThisProfiles(provider.GetRequiredService<ILogThisConfiguration>(),
@@ -175,17 +212,19 @@ namespace LogThis.Middleware
             Func<IServiceProvider, ILogThisConfiguration> factory,
             Func<IServiceProvider, IConfigurationSection?>? profileSection = null)
         {
-            services.AddSingleton<ILogThisConfiguration>(provider =>
+            services.AddSingleton(provider =>
             {
                 ILogThisConfiguration configuration = factory(provider);
                 // Validate every registration path when options are first resolved.
                 LogParameters.PrepareComponents(configuration.MessageComponents);
                 return configuration;
             });
+
             services.AddSingleton<LogThisProfiles>(provider => BuildProfiles(provider,
                 profileSection != null ? profileSection(provider) : provider.GetService<IConfiguration>()?.GetSection(sectionKey)));
+
             services.AddSingleton<ILogThisScopeFactory>(provider => new LogThisScopeFactory(
-                provider.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>(),
+                provider.GetRequiredService<ILoggerFactory>(),
                 provider.GetRequiredService<ILogThisConfiguration>(),
                 provider.GetRequiredService<LogThisProfiles>()));
         }

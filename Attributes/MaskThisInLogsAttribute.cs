@@ -26,7 +26,7 @@ namespace LogThis.Attributes;
 /// </code>
 /// </example>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
-public sealed class MaskThisInLogsAttribute : Attribute
+public sealed class MaskThisInLogsAttribute : MaskInLogsAttribute
 {
     #region Constructors
 
@@ -36,18 +36,7 @@ public sealed class MaskThisInLogsAttribute : Attribute
     /// <summary>Uses a fixed replacement, including an empty string if supplied.</summary>
     /// <param name="replacement">Replacement for the entire parameter or property value.</param>
     /// <exception cref="ArgumentNullException">The explicit replacement is null.</exception>
-    public MaskThisInLogsAttribute(string replacement)
-    {
-        ArgumentNullException.ThrowIfNull(replacement);
-        Replacement = replacement;
-    }
-
-    #endregion
-
-    #region Public Properties
-
-    /// <summary>Gets the explicit replacement, or null to use configured JsonMaskValue.</summary>
-    public string? Replacement { get; }
+    public MaskThisInLogsAttribute(string replacement) : base(replacement) { }
 
     #endregion
 }

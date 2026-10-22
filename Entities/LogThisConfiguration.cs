@@ -1,5 +1,4 @@
-﻿using LogThis.Constants;
-using LogThis.Extensions;
+﻿using LogThis.Extensions;
 using LogThis.Interfaces;
 
 namespace LogThis.Entities
@@ -21,7 +20,7 @@ namespace LogThis.Entities
         /// <summary>Replacement text for each masked JSON field.</summary>
         /// <remarks>Also used by MaskThisInLogs without an explicit replacement. Applies per capture without mutating application values.</remarks>
         /// <value><c>*****</c> by default.</value>
-        public string JsonMaskValue { get; set; } = MessageComponentConstants.DefaultJsonMaskValue;
+        public string JsonMaskValue { get; set; } = Constants.MessageComponents.DefaultJsonMaskValue;
 
         /// <summary>Includes the declaring class name in each event.</summary>
         /// <value><see langword="false"/> by default.</value>
@@ -76,7 +75,7 @@ namespace LogThis.Entities
 
         /// <summary>Text separating placeholders in the message template.</summary>
         /// <value><c> | </c> by default.</value>
-        public string MessageDelimeter { get; set; } = MessageComponentConstants.DefaultDelimeter;
+        public string MessageDelimeter { get; set; } = Constants.MessageComponents.DefaultDelimeter;
 
         /// <summary>Settings for method-entry events.</summary>
         /// <value>Entry events are enabled at Information level by default.</value>

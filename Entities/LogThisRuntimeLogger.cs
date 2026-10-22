@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using LogThis.Constants;
+using LogThis.Entities.ConfigParameters;
+using LogThis.Enum;
 using LogThis.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -37,79 +39,17 @@ public static class LogThisRuntimeLogger
         {
             // Catch construction and provider failures without changing the intercepted method's outcome.
             // Check the level before serializing arguments or the return value.
-            if (!accessPoint.LogAccessPoint || !runtime.Logger.IsEnabled(accessPoint.LogLevel)) return;
-
-            ILogThisConfiguration configuration = runtime.Configuration;
-            // Read the ambient activity once per eligible event, never at operation-scope creation.
-            Activity? activity = configuration.LogTraceId || configuration.LogSpanId ? Activity.Current : null;
-            // Finish capture before requesting an ID: a serialization failure will suppress this event.
-            string? capturedArguments = arguments != null && configuration.LogMethodArguments
-                ? LogThisValueMasker.MaskArguments(context) : null;
-            string? capturedReturn = (arguments == null || exception != null) && configuration.LogMethodReturnValue
-                ? exception != null ? "" : maskReturn
-                    ? new Newtonsoft.Json.Linq.JValue(returnReplacement ?? configuration.JsonMaskValue).ToString(Newtonsoft.Json.Formatting.None)
-                    : LogThisValueMasker.MaskObject(returnValue) : null;
-            LogParameters parameters = new(configuration.MessageDelimeter);
-
-            string accessPointLabel = ReferenceEquals(accessPoint, configuration.OnEntryConfig)
-                ? MessageComponentConstants.OnEntryLabel
-                : ReferenceEquals(accessPoint, configuration.OnExceptionConfig)
-                    ? MessageComponentConstants.OnExceptionLabel
-                    : MessageComponentConstants.OnExitLabel;
-
-            parameters.AddMessage(accessPointLabel);
-            parameters.AddArgs(accessPoint.AccessPointMessage);
-
-            string? correlationId = configuration.LogCorrelationId ? runtime.Correlation.GetId(configuration) : null;
-            if (correlationId != null)
+            if (!accessPoint.LogAccessPoint || !runtime.Logger.IsEnabled(accessPoint.LogLevel))
             {
-                parameters.AddMessage((configuration.LogComponentLabels ? "Correlation ID: " : "") + MessageComponentConstants.CorrelationIdLabel);
-                parameters.AddArgs(correlationId);
+                return;
             }
 
-            if (activity?.IdFormat == ActivityIdFormat.W3C)
-            {
-                if (configuration.LogTraceId && activity.TraceId != default)
-                {
-                    parameters.AddMessage((configuration.LogComponentLabels ? "Trace ID: " : "") + MessageComponentConstants.TraceIdLabel);
-                    parameters.AddArgs(activity.TraceId.ToHexString());
-                }
-                if (configuration.LogSpanId && activity.SpanId != default)
-                {
-                    parameters.AddMessage((configuration.LogComponentLabels ? "Span ID: " : "") + MessageComponentConstants.SpanIdLabel);
-                    parameters.AddArgs(activity.SpanId.ToHexString());
-                }
-            }
+            LogParameters parameters = new(runtime);
 
-            if (durationMs.HasValue)
-            {
-                parameters.AddMessage((configuration.LogComponentLabels ? "Duration ms: " : "") + MessageComponentConstants.DurationMsLabel);
-                parameters.AddArgs(durationMs.Value);
-            }
+            List<IConfigParameter> configParameters = 
+                BuildConfigParameters(accessPoint, arguments, context, durationMs, exception, maskReturn, returnReplacement, returnValue, runtime);
 
-            if (configuration.LogClassName)
-            {
-                parameters.AddMessage((configuration.LogComponentLabels ? "Class: " : "") + MessageComponentConstants.ClassLabel);
-                parameters.AddArgs(context.ClassName);
-            }
-
-            if (configuration.LogMethodName)
-            {
-                parameters.AddMessage((configuration.LogComponentLabels ? "Method: " : "") + MessageComponentConstants.MethodNameLabel);
-                parameters.AddArgs(context.MethodName);
-            }
-
-            if (capturedArguments != null)
-            {
-                parameters.AddMessage((configuration.LogComponentLabels ? "Arguments: " : "") + MessageComponentConstants.ArgumentsLabel);
-                parameters.AddArgs(capturedArguments);
-            }
-
-            if (capturedReturn != null)
-            {
-                parameters.AddMessage((configuration.LogComponentLabels ? "Return value: " : "") + MessageComponentConstants.ReturnValueLabel);
-                parameters.AddArgs(capturedReturn);
-            }
+            configParameters.ForEach(parameters.Add);
 
             parameters.AddMessageComponents(runtime.MessageComponents);
             runtime.Logger.Log(accessPoint.LogLevel, exception, parameters.Message, parameters.Args);
@@ -149,49 +89,51 @@ public static class LogThisRuntimeLogger
 
     #endregion
 
+    #region Private Methods
+
+    /// <summary>Captures payloads and constructs event components in their rendered order.</summary>
+    /// <remarks>Called after event and level checks. Payload capture precedes lazy correlation-ID generation.</remarks>
+    private static List<IConfigParameter> BuildConfigParameters(
+        IAccessPointConfiguration accessPoint,
+        object?[]? arguments,
+        LogThisMethodContext context,
+        double? durationMs,
+        Exception? exception,
+        bool maskReturn,
+        string? returnReplacement,
+        object? returnValue,
+        LogThisRuntime runtime)
+    {
+        CapturedArgumentsConfigParameter capturedArguments = new(arguments, context, runtime);
+
+        CapturedReturnConfigParameter? capturedReturn =
+            accessPoint.EventKind == AccessPointEventKind.Entry
+                ? null
+                : new CapturedReturnConfigParameter(exception, maskReturn, returnReplacement, returnValue, runtime);
+
+        List<IConfigParameter> configParams =
+        [
+            new AccessPointConfigParameter(accessPoint, runtime),
+            new CorrelationIdConfigParameter(runtime),
+            new TraceIdConfigParameter(runtime),
+            new SpanIdConfigParameter(runtime),
+            new DurationConfigParameter(durationMs, runtime),
+            new ClassNameConfigParameter(context, runtime),
+            new MethodNameConfigParameter(context, runtime),
+            capturedArguments
+        ];
+
+        if (capturedReturn != null)
+        {
+            configParams.Add(capturedReturn);
+        }
+
+        return configParams;
+    }
+
+    #endregion
+
     #region Public Methods
-
-    /// <summary>Selects a method's complete configuration for logging and serialization, restoring its caller on disposal.</summary>
-    /// <param name="profile">Named profile, or null to select the operation's default configuration.</param>
-    /// <returns>A selection scope, or null outside an operation scope.</returns>
-    /// <exception cref="ArgumentException">The profile name is empty or whitespace.</exception>
-    /// <exception cref="InvalidOperationException">The named profile is not registered in the active operation.</exception>
-    /// <remarks>Configuration errors are raised before application execution. This does not generate or replace correlation IDs.</remarks>
-    public static IDisposable? SelectProfile(string? profile)
-    {
-        LogThisRuntime? runtime = LogThisRuntimeContext.Current;
-        if (runtime == null) return null;
-        LogThisProfiles.Selection selection = runtime.Profiles.Select(profile);
-        return LogThisRuntimeContext.Push(runtime with
-        {
-            Configuration = selection.Configuration,
-            MessageComponents = selection.MessageComponents
-        });
-    }
-
-    /// <summary>Starts elapsed timing only when enabled in the active scope.</summary>
-    /// <returns>A Stopwatch timestamp, or null when timing is disabled or configuration fails.</returns>
-    public static long? StartDuration()
-    {
-        try
-        {
-            return LogThisRuntimeContext.Current?.Configuration.LogMethodDuration == true
-                ? Stopwatch.GetTimestamp()
-                : null;
-        }
-        catch
-        {
-            // Optional logging must not prevent application execution.
-            return null;
-        }
-    }
-
-    /// <summary>Stops timing before completion-event formatting begins.</summary>
-    /// <param name="startTimestamp">Timestamp captured immediately before method execution.</param>
-    /// <returns>Elapsed milliseconds, or null without reading the clock when disabled.</returns>
-    public static double? FinishDuration(long? startTimestamp) => startTimestamp.HasValue
-        ? Stopwatch.GetElapsedTime(startTimestamp.Value).TotalMilliseconds
-        : null;
 
     /// <summary>Emits a method-entry event when a scope is active.</summary>
     /// <param name="context">Method metadata and arguments for this invocation.</param>
@@ -252,7 +194,57 @@ public static class LogThisRuntimeLogger
     {
         LogThisRuntime? runtime = LogThisRuntimeContext.Current;
         if (runtime != null)
+        {
             Write(runtime, runtime.Configuration.OnExitConfig, context, null, null, null, durationMs, true, replacement);
+        }
+    }
+
+    /// <summary>Stops timing before completion-event formatting begins.</summary>
+    /// <param name="startTimestamp">Timestamp captured immediately before method execution.</param>
+    /// <returns>Elapsed milliseconds, or null without reading the clock when disabled.</returns>
+    public static double? FinishDuration(long? startTimestamp) => startTimestamp.HasValue
+        ? Stopwatch.GetElapsedTime(startTimestamp.Value).TotalMilliseconds
+        : null;
+
+    /// <summary>Selects a method's complete configuration for logging and serialization, restoring its caller on disposal.</summary>
+    /// <param name="profile">Named profile, or null to select the operation's default configuration.</param>
+    /// <returns>A selection scope, or null outside an operation scope.</returns>
+    /// <exception cref="ArgumentException">The profile name is empty or whitespace.</exception>
+    /// <exception cref="InvalidOperationException">The named profile is not registered in the active operation.</exception>
+    /// <remarks>Configuration errors are raised before application execution. This does not generate or replace correlation IDs.</remarks>
+    public static IDisposable? SelectProfile(string? profile)
+    {
+        LogThisRuntime? runtime = LogThisRuntimeContext.Current;
+
+        if (runtime == null)
+        {
+            return null;
+        }
+
+        LogThisProfiles.Selection selection = runtime.Profiles.Select(profile);
+
+        return LogThisRuntimeContext.Push(runtime with
+        {
+            Configuration = selection.Configuration,
+            MessageComponents = selection.MessageComponents
+        });
+    }
+
+    /// <summary>Starts elapsed timing only when enabled in the active scope.</summary>
+    /// <returns>A Stopwatch timestamp, or null when timing is disabled or configuration fails.</returns>
+    public static long? StartDuration()
+    {
+        try
+        {
+            return LogThisRuntimeContext.Current?.Configuration.LogMethodDuration == true
+                ? Stopwatch.GetTimestamp()
+                : null;
+        }
+        catch
+        {
+            // Optional logging must not prevent application execution.
+            return null;
+        }
     }
 
     #endregion

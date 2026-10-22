@@ -9,5 +9,5 @@ public interface ILogThisScopeFactory
     /// <param name="categoryName">Logging category assigned to events in this scope.</param>
     /// <returns>A scope that restores the previous runtime when disposed.</returns>
     /// <exception cref="ArgumentException"><paramref name="categoryName"/> is empty or whitespace.</exception>
-    IDisposable BeginScope(string categoryName = MessageComponentConstants.DefaultCategoryName);
+    IDisposable BeginScope(string categoryName = MessageComponents.DefaultCategoryName);
 }
