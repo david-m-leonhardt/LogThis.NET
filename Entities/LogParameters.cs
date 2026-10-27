@@ -8,8 +8,10 @@ namespace LogThis.Entities
     {
         #region Private Properties
 
+        /// <summary>Component-label preference captured when the event template is constructed.</summary>
         private readonly bool hasComponentLabels;
 
+        /// <summary>Selected delimiter used to join this event's message fragments.</summary>
         private readonly string messageDelimiter;
 
         // Values correspond positionally to the placeholders in _messages.
@@ -22,19 +24,16 @@ namespace LogThis.Entities
 
         #region Constructors
 
-        /// <summary>Creates a template builder with the specified message delimiter.</summary>
-        /// <param name="messageDelimiter">Separator placed between message fragments.</param>
-        public LogParameters(string messageDelimiter)
+        /// <summary>Builds enabled library components and appends the runtime's prepared custom components.</summary>
+        /// <param name="runtimeValues">Event data and runtime configuration after eligibility checks.</param>
+        internal LogParameters(LogThisRuntimeValues runtimeValues)
         {
-            this.messageDelimiter = messageDelimiter;
-        }
+            hasComponentLabels = runtimeValues.Runtime.Configuration.LogComponentLabels;
+            messageDelimiter = runtimeValues.Runtime.Configuration.MessageDelimeter;
 
-        /// <summary>Creates a template builder for the selected LogThis runtime.</summary>
-        /// <param name="runtime">Selected configuration supplying delimiters and component-label settings.</param>
-        internal LogParameters(LogThisRuntime runtime)
-        {
-            messageDelimiter = runtime.Configuration.MessageDelimeter;
-            hasComponentLabels = runtime.Configuration.LogComponentLabels;
+            ConfigParamFactory.BuildConfigParameters(runtimeValues).ForEach(Add);
+
+            AddMessageComponents(runtimeValues.Runtime.MessageComponents);
         }
 
         #endregion
@@ -68,21 +67,6 @@ namespace LogThis.Entities
 
         #region Private Methods
 
-        /// <summary>Prefixes recognized placeholders with a friendly label when labels are enabled.</summary>
-        private string FormatComponentWithLabel(string componentLabel)
-        {
-            string label = hasComponentLabels &&
-                          MessageComponents.LabelMap.TryGetValue(componentLabel, out string? value)
-               ? value
-               : string.Empty;
-
-            return label + componentLabel;
-        }
-
-        #endregion
-
-        #region Internal Methods
-
         /// <summary>Appends an eligible component's placeholder and value together to preserve their alignment.</summary>
         /// <param name="configParam">Prepared component and its inclusion decision.</param>
         internal void Add(IConfigParameter configParam)
@@ -94,31 +78,24 @@ namespace LogThis.Entities
             }
         }
 
-        #endregion
-
-        #region Public Methods
-
-        /// <summary>Appends a value for the next message placeholder.</summary>
-        /// <param name="obj">Value to associate with a placeholder.</param>
-        public void AddArgs(object obj)
-        {
-            _args.Add(obj);
-        }
-
-        /// <summary>Appends a message fragment or structured placeholder.</summary>
-        /// <param name="message">Fragment to append to the template.</param>
-        public void AddMessage(string message)
-        {
-            _messages.Add(message);
-        }
-
         /// <summary>Appends custom placeholders and their values in matching order.</summary>
         /// <param name="messageComponents">Structured placeholders mapped to values.</param>
-        public void AddMessageComponents(Dictionary<string, object> messageComponents)
+        private void AddMessageComponents(Dictionary<string, object> messageComponents)
         {
             // Preserve matching placeholder/value order for custom components.
             _messages.AddRange([.. messageComponents.Keys]);
             _args.AddRange([.. messageComponents.Values]);
+        }
+
+        /// <summary>Prefixes recognized placeholders with a friendly label when labels are enabled.</summary>
+        private string FormatComponentWithLabel(string componentLabel)
+        {
+            string label = hasComponentLabels &&
+                          MessageComponents.LabelMap.TryGetValue(componentLabel, out string? value)
+               ? value
+               : string.Empty;
+
+            return label + componentLabel;
         }
 
         #endregion

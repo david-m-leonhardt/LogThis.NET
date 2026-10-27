@@ -16,8 +16,8 @@ namespace LogThis.Entities.ConfigParameters
         #region Constructor
 
         /// <summary>Captures the complete span identifier from the activity observed by this component.</summary>
-        /// <param name="runtime">Selected runtime configuration and operation state.</param>
-        public SpanIdConfigParameter(LogThisRuntime runtime) : base(runtime)
+        /// <param name="runtimeValues">Event data and selected configuration controlling span enrichment.</param>
+        public SpanIdConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
             if (Configuration.LogSpanId && 
                 activity is { IdFormat: ActivityIdFormat.W3C } current &&

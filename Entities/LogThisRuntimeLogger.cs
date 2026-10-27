@@ -1,9 +1,6 @@
-using System.Diagnostics;
-using LogThis.Constants;
-using LogThis.Entities.ConfigParameters;
-using LogThis.Enum;
 using LogThis.Interfaces;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace LogThis.Entities;
 
@@ -15,48 +12,29 @@ public static class LogThisRuntimeLogger
     #region Private Methods
 
     /// <summary>Builds and emits one access-point event when its log level is enabled.</summary>
-    /// <param name="runtime">Logger and configuration for the active scope.</param>
-    /// <param name="accessPoint">Settings for the event being emitted.</param>
-    /// <param name="context">Method metadata and arguments for this invocation.</param>
-    /// <param name="arguments">Arguments to log, or <see langword="null"/> for exit.</param>
-    /// <param name="returnValue">Result to log on exit, when configured.</param>
-    /// <param name="exception">Exception associated with the event, if any.</param>
-    /// <param name="durationMs">Elapsed milliseconds, or null when timing is disabled.</param>
-    /// <param name="maskReturn">Whether the successful result is replaced without capture.</param>
-    /// <param name="returnReplacement">Literal replacement, or null for the configured mask.</param>
-    private static void Write(
-        LogThisRuntime runtime,
-        IAccessPointConfiguration accessPoint,
-        LogThisMethodContext context,
-        object?[]? arguments,
-        object? returnValue,
-        Exception? exception,
-        double? durationMs = null,
-        bool maskReturn = false,
-        string? returnReplacement = null)
+    /// <param name="runtimeValues">Event settings, invocation payload, and selected runtime state.</param>
+    private static void Write(LogThisRuntimeValues runtimeValues)
     {
         try
         {
             // Catch construction and provider failures without changing the intercepted method's outcome.
             // Check the level before serializing arguments or the return value.
-            if (!accessPoint.LogAccessPoint || !runtime.Logger.IsEnabled(accessPoint.LogLevel))
+            if (runtimeValues.ShouldNotLog)
             {
                 return;
             }
 
-            LogParameters parameters = new(runtime);
+            LogParameters parameters = new(runtimeValues);
 
-            List<IConfigParameter> configParameters = 
-                BuildConfigParameters(accessPoint, arguments, context, durationMs, exception, maskReturn, returnReplacement, returnValue, runtime);
-
-            configParameters.ForEach(parameters.Add);
-
-            parameters.AddMessageComponents(runtime.MessageComponents);
-            runtime.Logger.Log(accessPoint.LogLevel, exception, parameters.Message, parameters.Args);
+            runtimeValues.Runtime.Logger.Log(
+                runtimeValues.AccessPoint.LogLevel,
+                runtimeValues.Exception,
+                parameters.Message,
+                parameters.Args);
         }
         catch (Exception loggingException)
         {
-            ReportFailure(runtime.Configuration, loggingException, "LogThis failed while emitting a method log.");
+            ReportFailure(runtimeValues.Runtime.Configuration, loggingException, "LogThis failed while emitting a method log.");
         }
     }
 
@@ -89,50 +67,6 @@ public static class LogThisRuntimeLogger
 
     #endregion
 
-    #region Private Methods
-
-    /// <summary>Captures payloads and constructs event components in their rendered order.</summary>
-    /// <remarks>Called after event and level checks. Payload capture precedes lazy correlation-ID generation.</remarks>
-    private static List<IConfigParameter> BuildConfigParameters(
-        IAccessPointConfiguration accessPoint,
-        object?[]? arguments,
-        LogThisMethodContext context,
-        double? durationMs,
-        Exception? exception,
-        bool maskReturn,
-        string? returnReplacement,
-        object? returnValue,
-        LogThisRuntime runtime)
-    {
-        CapturedArgumentsConfigParameter capturedArguments = new(arguments, context, runtime);
-
-        CapturedReturnConfigParameter? capturedReturn =
-            accessPoint.EventKind == AccessPointEventKind.Entry
-                ? null
-                : new CapturedReturnConfigParameter(exception, maskReturn, returnReplacement, returnValue, runtime);
-
-        List<IConfigParameter> configParams =
-        [
-            new AccessPointConfigParameter(accessPoint, runtime),
-            new CorrelationIdConfigParameter(runtime),
-            new TraceIdConfigParameter(runtime),
-            new SpanIdConfigParameter(runtime),
-            new DurationConfigParameter(durationMs, runtime),
-            new ClassNameConfigParameter(context, runtime),
-            new MethodNameConfigParameter(context, runtime),
-            capturedArguments
-        ];
-
-        if (capturedReturn != null)
-        {
-            configParams.Add(capturedReturn);
-        }
-
-        return configParams;
-    }
-
-    #endregion
-
     #region Public Methods
 
     /// <summary>Emits a method-entry event when a scope is active.</summary>
@@ -142,7 +76,7 @@ public static class LogThisRuntimeLogger
         LogThisRuntime? runtime = LogThisRuntimeContext.Current;
         if (runtime != null)
         {
-            Write(runtime, runtime.Configuration.OnEntryConfig, context, context.Arguments, null, null);
+            Write(RuntimeValuesFactory.BuildOnEntryValues(context, runtime));
         }
     }
 
@@ -162,15 +96,9 @@ public static class LogThisRuntimeLogger
         LogThisRuntime? runtime = LogThisRuntimeContext.Current;
         if (runtime != null)
         {
-            Write(runtime, runtime.Configuration.OnExceptionConfig, context, context.Arguments, null, exception, durationMs);
+            Write(RuntimeValuesFactory.BuildOnExceptionValues(context, durationMs, exception, runtime));
         }
     }
-
-    /// <summary>Emits a successful method-exit event when a scope is active.</summary>
-    /// <param name="context">Method metadata and arguments for this invocation.</param>
-    /// <param name="returnValue">Result produced by the method, if any.</param>
-    public static void Exit(LogThisMethodContext context, object? returnValue)
-        => Exit(context, returnValue, null);
 
     /// <summary>Emits a successful exit event with optional elapsed milliseconds.</summary>
     /// <param name="context">Method metadata and arguments.</param>
@@ -181,7 +109,7 @@ public static class LogThisRuntimeLogger
         LogThisRuntime? runtime = LogThisRuntimeContext.Current;
         if (runtime != null)
         {
-            Write(runtime, runtime.Configuration.OnExitConfig, context, null, returnValue, null, durationMs);
+            Write(RuntimeValuesFactory.BuildOnExitValues(context, durationMs, returnValue, runtime));
         }
     }
 
@@ -195,7 +123,7 @@ public static class LogThisRuntimeLogger
         LogThisRuntime? runtime = LogThisRuntimeContext.Current;
         if (runtime != null)
         {
-            Write(runtime, runtime.Configuration.OnExitConfig, context, null, null, null, durationMs, true, replacement);
+            Write(RuntimeValuesFactory.BuildOnExitValues(context, durationMs, replacement, runtime));
         }
     }
 

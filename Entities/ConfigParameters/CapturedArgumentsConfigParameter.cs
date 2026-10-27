@@ -15,15 +15,12 @@ namespace LogThis.Entities.ConfigParameters
         #region Constructor
 
         /// <summary>Serializes eligible arguments using the active exclusions and masking rules.</summary>
-        /// <param name="arguments">Argument payload marker, or null when arguments are not part of this event.</param>
-        /// <param name="context">Invocation metadata and included arguments.</param>
-        /// <param name="runtime">Selected runtime configuration and operation state.</param>
-        public CapturedArgumentsConfigParameter(object?[]? arguments, LogThisMethodContext context, LogThisRuntime runtime) : 
-            base(runtime)
+        /// <param name="runtimeValues">Argument payload, invocation metadata, and selected capture configuration.</param>
+        public CapturedArgumentsConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
-            if (arguments != null && Configuration.LogMethodArguments)
+            if (runtimeValues.Arguments != null && Configuration.LogMethodArguments)
             {
-                Obj = LogThisValueMasker.MaskArguments(context);
+                Obj = LogThisValueMasker.MaskArguments(runtimeValues.Context);
                 ShouldAddValue = true;
             }
         }

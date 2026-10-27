@@ -553,15 +553,38 @@ Parameter masks and `[MaskReturnInLogs]` apply directly to their annotated
 parameter or method and do not use `JsonFieldsToMask`.
 
 For ordinary object properties, attribute and configured-name masking occur
-without invoking the matched getter. Dictionary entries, existing JSON objects,
-and custom converters can require serialization or traversal before a
-configuration-based match is replaced. Disabled argument or return-value
-capture performs no masking work.
+without invoking the matched getter. Dictionary entries and existing JSON objects
+can require serialization or traversal before a configuration-based match is
+replaced. Disabled argument or return-value capture performs no masking work.
 
 Masking protects only LogThis-captured data. Unlisted properties remain
 unchanged, and application-authored logs or exception messages can still expose
 their values. Enable argument and return-value logging only when appropriate for
 the application's data and volume.
+
+### Enumerable capture safeguards
+
+LogThis avoids starting deferred work merely to create a log event. Properties
+declared as `IEnumerable` or a collection type are not read and appear as
+`"[Not read]"`. `[DontLogThis]` still omits the property, and masking attributes
+or configured names still take precedence.
+
+Values already supplied to capture follow their runtime type. Arrays, exact
+`List<T>` and `Dictionary<TKey, TValue>` instances, strings, and existing
+`JToken` values serialize normally. Other enumerable values appear as
+`"[Not enumerated]"` without enumeration, count inspection, or `ToString()`.
+The same rules apply inside captured object graphs.
+
+A sequence hidden behind an `object` property cannot be identified before its
+getter runs. Ordinary getters, serialization callbacks, converter constructors,
+and dictionary-key conversion can therefore still execute. LogThis does not use
+application Newtonsoft converters to write captured values, and a converter
+construction failure can suppress the affected event.
+
+These safeguards never replace or consume application values and do not affect
+serialization outside LogThis. They also do not impose collection-size limits or
+change iterator-method instrumentation. Arrays keep Newtonsoft's normal format,
+including Base64 for `byte[]`.
 
 ## Configuration
 

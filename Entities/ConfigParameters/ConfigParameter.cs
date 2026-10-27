@@ -3,13 +3,13 @@ using LogThis.Interfaces;
 namespace LogThis.Entities.ConfigParameters
 {
     /// <summary>Carries a structured placeholder, its value, and whether the component should be emitted.</summary>
-    /// <param name="runtime">Selected runtime configuration and operation state.</param>
-    internal abstract class ConfigParameter(LogThisRuntime runtime) : IConfigParameter
+    /// <param name="runtimeValues">Event data and runtime state supplying the selected configuration.</param>
+    internal abstract class ConfigParameter(LogThisRuntimeValues runtimeValues) : IConfigParameter
     {
         #region Protected Properties
 
         /// <summary>Selected configuration used to decide whether this component is included.</summary>
-        protected ILogThisConfiguration Configuration { get; } = runtime.Configuration;
+        protected ILogThisConfiguration Configuration { get; } = runtimeValues.Runtime.Configuration;
 
         #endregion
 

@@ -3,7 +3,7 @@ using LogThis.Constants;
 namespace LogThis.Entities.ConfigParameters
 {
     /// <summary>Includes the intercepted method name when enabled by the selected configuration.</summary>
-    internal sealed class MethodNameConfigParameter : ContextMethodConfigParameter
+    internal sealed class MethodNameConfigParameter : ConfigParameter
     {
         #region Public Properties
 
@@ -15,13 +15,12 @@ namespace LogThis.Entities.ConfigParameters
         #region Constructor
 
         /// <summary>Reads the method name from invocation metadata when enabled.</summary>
-        /// <param name="context">Invocation metadata and included arguments.</param>
-        /// <param name="runtime">Selected runtime configuration and operation state.</param>
-        public MethodNameConfigParameter(LogThisMethodContext context, LogThisRuntime runtime) : base(context, runtime)
+        /// <param name="runtimeValues">Invocation metadata and runtime state supplying the method name and inclusion setting.</param>
+        public MethodNameConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
             if (Configuration.LogMethodName)
             {
-                Obj = context.MethodName;
+                Obj = runtimeValues.Context.MethodName;
                 ShouldAddValue = true;
             }
         }

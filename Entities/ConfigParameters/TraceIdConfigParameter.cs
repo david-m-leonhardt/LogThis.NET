@@ -16,8 +16,8 @@ namespace LogThis.Entities.ConfigParameters
         #region Constructor
 
         /// <summary>Captures the complete trace identifier from the activity observed by this component.</summary>
-        /// <param name="runtime">Selected runtime configuration and operation state.</param>
-        public TraceIdConfigParameter(LogThisRuntime runtime) : base(runtime)
+        /// <param name="runtimeValues">Selected runtime configuration and operation state.</param>
+        public TraceIdConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
             if (Configuration.LogTraceId && 
                 activity is { IdFormat: ActivityIdFormat.W3C } current &&

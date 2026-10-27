@@ -1,5 +1,11 @@
 # Opt-out integration checks
 
+Deferred capture checks exercise declared enumerable getters and conditional hooks,
+exact supported collections, nested sequences, object-typed properties, prebuilt
+JSON, extension-data properties, masking precedence, and profile isolation. Converter
+probes count constructors, CanConvert, CanWrite, and WriteJson separately, including
+throwing constructor containment and unchanged serialization outside LogThis.
+
 Run from the repository root:
 
 ```powershell
@@ -36,6 +42,11 @@ Component checks cover default and disabled labels, raw structured names and
 values, reserved-name validation across registration paths, case/brace/format
 normalization, disabled-feature reservations, allowed custom names, and the
 post-validation component snapshot policy.
+
+Event-payload checks cover the runtime-value factory handoff through emitted
+events: ordinary string/null results versus default/literal/empty masks, exception
+and entry payloads, optional numeric durations, custom-component order, and
+configuration changes between events without stale fields or labels.
 
 Masking checks cover MaskThisInLogs replacements, exclusion/configuration
 precedence, skipped throwing getters, whole object/collection replacement, null

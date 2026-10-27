@@ -15,10 +15,10 @@ namespace LogThis.Entities.ConfigParameters
         #region Constructor
 
         /// <summary>Reuses or lazily generates the enabled chain ID; omits unavailable IDs.</summary>
-        /// <param name="runtime">Selected runtime configuration and operation state.</param>
-        public CorrelationIdConfigParameter(LogThisRuntime runtime) : base(runtime)
+        /// <param name="runtimeValues">Event data and runtime state containing the shared operation-chain identity.</param>
+        public CorrelationIdConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
-            if (Configuration.LogCorrelationId && runtime.Correlation.GetId(Configuration) is string correlationId)
+            if (Configuration.LogCorrelationId && runtimeValues.Runtime.Correlation.GetId(Configuration) is string correlationId)
             {
                 Obj = correlationId;
                 ShouldAddValue = correlationId != null;

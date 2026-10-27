@@ -1,6 +1,5 @@
 using LogThis.Constants;
 using LogThis.Enum;
-using LogThis.Interfaces;
 
 namespace LogThis.Entities.ConfigParameters
 {
@@ -32,12 +31,11 @@ namespace LogThis.Entities.ConfigParameters
         #region Constructor
 
         /// <summary>Selects the placeholder for the configured event kind.</summary>
-        /// <param name="accessPoint">Event kind and configured event message.</param>
-        /// <param name="runtime">Selected runtime configuration and operation state.</param>
-        public AccessPointConfigParameter(IAccessPointConfiguration accessPoint, LogThisRuntime runtime) : base(runtime)
+        /// <param name="runtimeValues">Event settings and selected runtime state used to choose the message placeholder.</param>
+        public AccessPointConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
-            _message = EventKingLabelMap[accessPoint.EventKind];
-            Obj = accessPoint.AccessPointMessage;
+            _message = EventKingLabelMap[runtimeValues.AccessPoint.EventKind];
+            Obj = runtimeValues.AccessPoint.AccessPointMessage;
             ShouldAddValue = true;
         }
 

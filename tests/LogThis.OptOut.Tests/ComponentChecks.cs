@@ -15,6 +15,7 @@ public static class ComponentChecks
     public static void Run()
     {
         CheckLabels();
+        CheckEventPayloads();
         CheckReservations();
         CheckMutation();
     }
@@ -22,6 +23,61 @@ public static class ComponentChecks
     #endregion
 
     #region Private Methods
+
+    /// <summary>Event-data factories must keep arguments, results, masks, and durations on the correct events.</summary>
+    private static void CheckEventPayloads()
+    {
+        var sink = new CorrelationLogger();
+        using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(sink));
+        var options = new LogThisConfiguration
+        {
+            LogCorrelationId = false, LogClassName = true,
+            LogMethodArguments = true, LogMethodReturnValue = true, JsonMaskValue = "configured"
+        };
+        options.AddMessageComponents(new() { ["Tenant"] = "tail" });
+        using var scope = new LogThisScopeFactory(loggerFactory, options).BeginScope("payloads");
+        var context = LogThisMethodContext.FromNamedArguments("Call", "Service", [new("input", "argument")]);
+
+        // A string result must take the ordinary result path, not become mask metadata.
+        LogThisRuntimeLogger.Exit(context, "original", 4.5);
+        LogThisRuntimeLogger.Exit(context, null, null);
+        LogThisRuntimeLogger.ExitMasked(context, null, 5.5);
+        LogThisRuntimeLogger.ExitMasked(context, "[FIXED]", null);
+        LogThisRuntimeLogger.ExitMasked(context, "", null);
+        LogThisRuntimeLogger.Exception(context, new InvalidOperationException("original"), 6.5);
+        LogThisRuntimeLogger.Entry(context);
+
+        var events = sink.Events.ToArray();
+        Check(events.Length == 7, "Event-data preparation lost or added events.");
+        string[] results = ["\"original\"", "null", "\"configured\"", "\"[FIXED]\"", "\"\"", ""];
+        for (int i = 0; i < results.Length; i++)
+            Check(Equals(events[i].Single(p => p.Key == "LogThisReturnValue").Value, results[i]), "Result or replacement was routed incorrectly at event " + i);
+        for (int i = 0; i < 5; i++)
+            Check(events[i].Any(p => p.Key == "LogThisOnExit") && events[i].All(p => p.Key != "LogThisArguments"), "Successful exit captured arguments or changed event kind.");
+        Check(events[5].Any(p => p.Key == "LogThisOnException") && events[6].Any(p => p.Key == "LogThisOnEntry"), "Exception/entry settings were mixed.");
+        foreach (int i in new[] { 5, 6 })
+            Check(Equals(events[i].Single(p => p.Key == "LogThisArguments").Value, "{\"input\":\"argument\"}"), "Named arguments were lost during event preparation.");
+        Check(events[6].All(p => p.Key is not "LogThisReturnValue" and not "LogThisDurationMs"), "Completion data leaked into entry.");
+        Check(Equals(events[0].Single(p => p.Key == "LogThisDurationMs").Value, 4.5) &&
+            Equals(events[2].Single(p => p.Key == "LogThisDurationMs").Value, 5.5) &&
+            Equals(events[5].Single(p => p.Key == "LogThisDurationMs").Value, 6.5), "Completion duration changed during routing.");
+        foreach (int i in new[] { 1, 3, 4 })
+            Check(events[i].All(p => p.Key != "LogThisDurationMs"), "Absent duration inherited another event's value.");
+        foreach (var entry in events)
+            Check(entry.Where(p => p.Key != "{OriginalFormat}").Last().Key == "Tenant", "Custom components no longer follow library components.");
+
+        // New templates must observe current settings without retaining fields from earlier events.
+        options.LogComponentLabels = false;
+        options.LogClassName = false;
+        options.LogMethodArguments = false;
+        options.LogMethodReturnValue = false;
+        sink.Events.Clear();
+        sink.Messages.Clear();
+        LogThisRuntimeLogger.Entry(context);
+        LogThisRuntimeLogger.ExitMasked(context, "[FIXED]", null);
+        LogThisRuntimeLogger.Exception(context, new InvalidOperationException("original"));
+        Check(sink.Messages.SequenceEqual(new[] { "Entered | Call | tail", "Exited | Call | tail", "Exception | Call | tail" }), "New templates retained disabled labels or components.");
+    }
 
     /// <summary>Labels change only templates; event fields and their order remain unchanged.</summary>
     private static void CheckLabels()

@@ -34,7 +34,7 @@ public static class MaskingChecks
                 JToken captured = JToken.Parse((string)field.Value!);
                 if (field.Key == "LogThisArguments") captured = captured["value"]!;
                 Verify(captured["Item"]!, "configured");
-                Verify(captured["Items"]![0]!, "configured");
+                Check((string?)captured["Items"] == "[Not read]", "Enumerable property was not skipped.");
             }
             Check(payload.Reads == 0 && payload.Password == "real password" && payload.Null == null, "Capture read a masked getter or changed the model.");
             Check(payload.StoredCustomer.Secret == "customer secret" && payload.StoredItems.Length == 1, "Whole-value masking changed contents.");

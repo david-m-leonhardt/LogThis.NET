@@ -15,11 +15,10 @@ namespace LogThis.Entities.ConfigParameters
         #region Constructor
 
         /// <summary>Uses the supplied milliseconds without starting or stopping a timer.</summary>
-        /// <param name="durationMs">Previously measured elapsed milliseconds, or null when timing is disabled.</param>
-        /// <param name="runtime">Selected runtime configuration and operation state.</param>
-        public DurationConfigParameter(double? durationMs, LogThisRuntime runtime) : base(runtime)
+        /// <param name="runtimeValues">Event data containing elapsed milliseconds measured before formatting.</param>
+        public DurationConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
-            if (durationMs is double duration)
+            if (runtimeValues.DurationMs is double duration)
             {
                 Obj = duration;
                 ShouldAddValue = true;

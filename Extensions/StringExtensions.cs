@@ -37,17 +37,29 @@ namespace LogThis.Extensions
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(source);
                 string name = source.Trim();
-                if (name.StartsWith('{') && name.EndsWith('}')) name = name[1..^1];
+                if (name.StartsWith('{') && name.EndsWith('}'))
+                {
+                    name = name[1..^1];
+                }
+
                 if (string.IsNullOrWhiteSpace(name) || name.Contains('{') || name.Contains('}'))
+                {
                     throw new ArgumentException($"Message component '{source}' must be a bare name or a single brace-wrapped placeholder. Choose another name.");
+                }
 
                 // Alignment/format suffixes and provider hints cannot bypass reservations.
                 int suffix = name.IndexOfAny([',', ':']);
                 string propertyName = (suffix < 0 ? name : name[..suffix]).Trim().TrimStart('@', '$').Trim();
+
                 if (propertyName.Length == 0)
+                {
                     throw new ArgumentException($"Message component '{source}' has no property name. Choose another name.");
+                }
+
                 if (ReservedNames.Contains(propertyName))
+                {
                     throw new ArgumentException($"Message component '{source}' conflicts with reserved LogThis property '{propertyName}'. Choose another name.");
+                }
 
                 return "{" + name + "}";
             }

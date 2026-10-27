@@ -17,22 +17,16 @@ namespace LogThis.Entities.ConfigParameters
         #region Constructor
 
         /// <summary>Builds a completion payload without reading the original result when masked.</summary>
-        /// <param name="exception">Method failure, or null for a successful completion.</param>
-        /// <param name="maskReturn">Whether to substitute a mask instead of capturing the original result.</param>
-        /// <param name="returnReplacement">Explicit replacement, or null to use the configured JsonMaskValue.</param>
-        /// <param name="returnValue">Original result, inspected only when capture is enabled and no return mask applies.</param>
-        /// <param name="runtime">Selected runtime configuration and operation state.</param>
-        public CapturedReturnConfigParameter(Exception? exception, bool maskReturn, string? returnReplacement, object? returnValue,
-            LogThisRuntime runtime) :
-            base(runtime)
+        /// <param name="runtimeValues">Completion result or exception, return-mask metadata, and selected configuration.</param>
+        public CapturedReturnConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
             if (Configuration.LogMethodReturnValue)
             {
-                Obj = exception != null
+                Obj = runtimeValues.Exception != null
                     ? string.Empty
-                    : maskReturn
-                        ? new JValue(returnReplacement ?? Configuration.JsonMaskValue).ToString(Formatting.None)
-                        : LogThisValueMasker.MaskObject(returnValue);
+                    : runtimeValues.MaskReturn
+                        ? new JValue(runtimeValues.ReturnReplacement ?? Configuration.JsonMaskValue).ToString(Formatting.None)
+                        : LogThisValueMasker.MaskObject(runtimeValues.ReturnValue);
 
                 ShouldAddValue = true;
             }

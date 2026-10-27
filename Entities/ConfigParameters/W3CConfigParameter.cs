@@ -15,8 +15,8 @@ namespace LogThis.Entities.ConfigParameters
         #region Constructor
 
         /// <summary>Reads Activity.Current only when trace or span enrichment is enabled.</summary>
-        /// <param name="runtime">Selected runtime configuration and operation state.</param>
-        protected W3CConfigParameter(LogThisRuntime runtime) : base(runtime)
+        /// <param name="runtimeValues">Event data and selected configuration controlling ambient activity reads.</param>
+        protected W3CConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
             // Read ambient context for this component rather than caching it at operation-scope creation.
             activity = Configuration.LogTraceId || Configuration.LogSpanId ? Activity.Current : null;
