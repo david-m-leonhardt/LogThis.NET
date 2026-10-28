@@ -216,6 +216,7 @@ namespace LogThis.Middleware
             {
                 ILogThisConfiguration configuration = factory(provider);
                 // Validate every registration path when options are first resolved.
+                LogThisProfiles.ValidateCaptureLength(configuration);
                 LogParameters.PrepareComponents(configuration.MessageComponents);
                 return configuration;
             });

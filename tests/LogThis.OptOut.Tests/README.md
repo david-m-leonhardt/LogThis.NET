@@ -82,3 +82,7 @@ fixtures can be enabled with `-p:ReturnMaskDiagnosticMode=DIAGNOSTICS` (three
 `LOGTHIS002` warnings) or `-p:ReturnMaskDiagnosticMode=NULL` (two `LOGTHIS001`
 errors) when building this project. Run the normal suite afterward without these
 symbols. Direct constructor null validation is included in the runtime checks.
+
+## Captured-content formatting checks
+
+`TruncationChecks` covers default and named configuration registration, invalid lengths, preview boundaries and escaping, surrogate pairs, combined argument capture, independent return capture, masking order, profile restoration, and unchanged application outcomes.

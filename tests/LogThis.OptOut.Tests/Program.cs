@@ -50,6 +50,7 @@ await ParameterMaskChecks.RunAsync();
 MaskInheritanceChecks.Run();
 await ReturnMaskChecks.RunAsync();
 DeferredCaptureChecks.Run();
+TruncationChecks.Run();
 Console.WriteLine("All opt-out integration checks passed.");
 
 [LogThis]

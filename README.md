@@ -748,6 +748,8 @@ active LogThis scope; LogThis does not silently fall back to the default.
 | `DebugLogThis` | `false` | Enables best-effort console diagnostics for internal LogThis failures. |
 | `JsonFieldsToMask` | Empty | Lists JSON property names to redact. |
 | `JsonMaskValue` | `"*****"` | Sets the replacement for redacted values. |
+| `TruncateCapturedValues` | `true` | Wraps oversized completed captures with a preview. Disable for unlimited output. |
+| `MaxCapturedValueLength` | `4096` | Positive preview length in UTF-16 units, excluding wrapper/escaping overhead. |
 | `LogClassName` | `false` | Adds the declaring class as `{LogThisClass}`. |
 | `LogComponentLabels` | `true` | Adds descriptive labels such as `Class:` and `Method:` to rendered components. |
 | `LogCorrelationId` | `true` | Lazily obtains the chain's ID for eligible events and adds `{LogThisCorrelationId}`. |
@@ -768,6 +770,46 @@ active LogThis scope; LogThis does not silently fall back to the default.
 
 Custom `IAccessPointConfiguration` implementations must return the appropriate
 entry, exit, or exception `EventKind`.
+
+### Captured-content truncation
+
+Captured argument and return-value output is limited by default.
+`TruncateCapturedValues` is `true`, and `MaxCapturedValueLength` is `4096`.
+Both settings can be configured on the default or a named profile:
+
+```csharp
+builder.Services.AddLogThisConfiguration(options =>
+{
+    options.MaxCapturedValueLength = 2048;
+});
+builder.Services.AddLogThisProfile("FullCapture", options =>
+{
+    options.TruncateCapturedValues = false;
+});
+```
+
+Only positive lengths are valid, even when truncation is disabled. Invalid
+lengths are rejected when configuration is resolved. Set
+`TruncateCapturedValues` to `false` for unlimited captured output.
+
+Masking and serialization occur before LogThis applies separate limits to the
+combined argument payload and return-value payload. Text within the limit is
+unchanged. An oversized capture becomes a valid JSON wrapper:
+
+```json
+{"truncated":true,"preview":"{\"username\":\"al"}
+```
+
+`preview` contains partial serialized text, not a complete JSON document. Its
+limit uses .NET string-length units (UTF-16) and never splits a surrogate pair;
+the wrapper and JSON escaping add overhead beyond the configured length. Masks
+and exclusions, including whole-return masks, are applied first.
+
+The limit does not bound the entire event, encoded byte size, serialization
+work, or memory use. Labels, identifiers, custom components, and exception text
+are unaffected. Consumers that parse captured structured strings must recognize
+the wrapper or disable truncation. Custom `ILogThisConfiguration`
+implementations must provide both truncation properties.
 
 ### Component labels and access-point messages
 

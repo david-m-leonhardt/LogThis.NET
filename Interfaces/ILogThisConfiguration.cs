@@ -19,6 +19,15 @@
         /// <value>The text substituted for each matched field value.</value>
         string JsonMaskValue { get; set; }
 
+        /// <summary>Limits completed captured payloads after masking; false permits unlimited output.</summary>
+        /// <value><see langword="true"/> by default.</value>
+        bool TruncateCapturedValues { get; set; }
+
+        /// <summary>Positive preview length in .NET string-length units, excluding wrapper and escaping overhead.</summary>
+        /// <remarks>Required to be positive even when truncation is disabled; surrogate pairs are not split.</remarks>
+        /// <value>4096 by default.</value>
+        int MaxCapturedValueLength { get; set; }
+
         /// <summary>Whether to include the declaring class name.</summary>
         /// <value><see langword="true"/> to add a class component.</value>
         bool LogClassName { get; set; }

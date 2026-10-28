@@ -1,5 +1,6 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using LogThis.Interfaces;
 
 namespace LogThis.Entities;
 
@@ -7,6 +8,27 @@ namespace LogThis.Entities;
 internal static class LogThisValueMasker
 {
     #region Internal Methods
+
+    /// <summary>Formats one completed, masked payload as unchanged text or a JSON preview wrapper.</summary>
+    /// <param name="text">Fully serialized and masked capture, never an application value.</param>
+    /// <param name="configuration">Selected profile's preview settings.</param>
+    /// <returns>The original text or a valid JSON wrapper containing partial serialized text.</returns>
+    internal static string FormatCapture(string text, ILogThisConfiguration configuration)
+    {
+        int length = configuration.MaxCapturedValueLength;
+        if (!configuration.TruncateCapturedValues || text.Length <= length)
+        {
+            return text;
+        }
+
+        // Keep a UTF-16 surrogate pair together even when that leaves one unused preview unit.
+        if (length > 0 && char.IsHighSurrogate(text[length - 1]) && char.IsLowSurrogate(text[length]))
+        {
+            length--;
+        }
+
+        return new JObject { ["truncated"] = true, ["preview"] = text[..length] }.ToString(Formatting.None);
+    }
 
     /// <summary>Serializes one value and masks matching properties at any depth.</summary>
     /// <param name="value">Value to serialize and mask.</param>

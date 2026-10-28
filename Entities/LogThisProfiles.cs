@@ -63,13 +63,27 @@ internal sealed class LogThisProfiles
         return name.Trim();
     }
 
+    /// <summary>Rejects invalid capture lengths regardless of the truncation toggle.</summary>
+    /// <param name="configuration">Default or named configuration being resolved.</param>
+    internal static void ValidateCaptureLength(ILogThisConfiguration configuration)
+    {
+        if (configuration.MaxCapturedValueLength <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(configuration.MaxCapturedValueLength),
+                configuration.MaxCapturedValueLength, "LogThis MaxCapturedValueLength must be greater than zero. Set TruncateCapturedValues to false for unlimited output.");
+        }
+    }
+
     #endregion
 
     #region Private Methods
 
     /// <summary>Pairs configuration with a validated snapshot of custom components for the scope lifetime.</summary>
     private static Selection Prepare(ILogThisConfiguration configuration)
-        => new(configuration, LogParameters.PrepareComponents(configuration.MessageComponents));
+    {
+        ValidateCaptureLength(configuration);
+        return new(configuration, LogParameters.PrepareComponents(configuration.MessageComponents));
+    }
 
     #endregion
 

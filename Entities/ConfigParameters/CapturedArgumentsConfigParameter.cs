@@ -20,7 +20,7 @@ namespace LogThis.Entities.ConfigParameters
         {
             if (runtimeValues.Arguments != null && Configuration.LogMethodArguments)
             {
-                Obj = LogThisValueMasker.MaskArguments(runtimeValues.Context);
+                Obj = LogThisValueMasker.FormatCapture(LogThisValueMasker.MaskArguments(runtimeValues.Context), Configuration);
                 ShouldAddValue = true;
             }
         }

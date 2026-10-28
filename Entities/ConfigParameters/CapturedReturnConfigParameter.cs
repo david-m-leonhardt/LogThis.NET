@@ -24,9 +24,9 @@ namespace LogThis.Entities.ConfigParameters
             {
                 Obj = runtimeValues.Exception != null
                     ? string.Empty
-                    : runtimeValues.MaskReturn
+                    : LogThisValueMasker.FormatCapture(runtimeValues.MaskReturn
                         ? new JValue(runtimeValues.ReturnReplacement ?? Configuration.JsonMaskValue).ToString(Formatting.None)
-                        : LogThisValueMasker.MaskObject(runtimeValues.ReturnValue);
+                        : LogThisValueMasker.MaskObject(runtimeValues.ReturnValue), Configuration);
 
                 ShouldAddValue = true;
             }

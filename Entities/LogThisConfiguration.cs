@@ -22,6 +22,16 @@ namespace LogThis.Entities
         /// <value><c>*****</c> by default.</value>
         public string JsonMaskValue { get; set; } = Constants.MessageComponents.DefaultJsonMaskValue;
 
+        /// <summary>Limits each completed arguments or return-value payload after serialization and masking.</summary>
+        /// <remarks>Disable for unlimited captured output. Does not bound serialization work or the whole event.</remarks>
+        /// <value><see langword="true"/> by default.</value>
+        public bool TruncateCapturedValues { get; set; } = true;
+
+        /// <summary>Maximum preview length in .NET string-length units, excluding wrapper and escaping overhead.</summary>
+        /// <remarks>Must be positive even when truncation is disabled. Surrogate pairs are not split.</remarks>
+        /// <value>4096 by default.</value>
+        public int MaxCapturedValueLength { get; set; } = 4096;
+
         /// <summary>Includes the declaring class name in each event.</summary>
         /// <value><see langword="false"/> by default.</value>
         public bool LogClassName { get; set; } = false;
