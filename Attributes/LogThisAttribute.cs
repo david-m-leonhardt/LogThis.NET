@@ -3,6 +3,8 @@ using LogThis.Constants;
 using Metalama.Framework.Advising;
 using Metalama.Framework.Aspects;
 using Metalama.Framework.Code;
+using Metalama.Framework.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace LogThis.Attributes;
 
@@ -10,12 +12,21 @@ namespace LogThis.Attributes;
 /// Weaves entry, exit, and exception logging into a method or every public concrete method of a class.
 /// Generated calls delegate runtime work to <see cref="LogThisRuntimeLogger"/>.
 /// </summary>
+/// <remarks>Yield iterator events describe creation, not consumption. Exit and duration finish before enumeration;
+/// later enumeration failures and cancellation are outside this boundary, and the selected profile is restored before returning.</remarks>
 [AttributeUsage(validOn: AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
 public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
 {
+    #region Private Fields
+
+    // The direct-return entry method retains the attribute although only its deferred implementation uses it.
+    private static readonly SuppressionDefinition IteratorCancellationWarning = new("CS8424");
+
+    #endregion
+
     #region Constructor
 
-    /// <summary>Creates an aspect that uses async templates for awaitable methods.</summary>
+    /// <summary>Uses async templates for awaitables and dedicated direct-return templates for yield iterators.</summary>
     public LogThisAttribute()
     {
         UseAsyncTemplateForAnyAwaitable = true;
@@ -41,17 +52,22 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
         MethodTemplateSelector templates = new(
             nameof(OverrideMethod),
             nameof(OverrideAsyncMethod),
-            null, null, null, null,
+            nameof(OverrideEnumerableMethod),
+            nameof(OverrideEnumeratorMethod),
+            nameof(OverrideAsyncEnumerableMethod),
+            nameof(OverrideAsyncEnumeratorMethod),
             true, false);
 
         foreach (IMethod method in builder.Target.Methods)
         {
-            if (method.Accessibility == Accessibility.Public && !method.IsAbstract &&
+            if (method.Accessibility == Accessibility.Public &&
+                !method.IsAbstract &&
                 !method.Attributes.OfAttributeType(typeof(DontLogThisAttribute)).Any() &&
                 !method.Attributes.OfAttributeType(typeof(LogThisAttribute)).Any())
             {
                 ValidateReturnMask(builder.With(method));
                 builder.With(method).Override(templates);
+                SuppressIteratorCancellationWarning(builder.With(method));
             }
         }
     }
@@ -68,6 +84,7 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
 
         ValidateReturnMask(builder);
         base.BuildAspect(builder);
+        SuppressIteratorCancellationWarning(builder);
     }
 
     /// <summary>Wraps an awaitable method and logs its completed result or failure.</summary>
@@ -129,9 +146,171 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
         }
     }
 
+    /// <summary>Logs iterator creation without advancing or disposing the returned iterator.</summary>
+    /// <returns>The original iterator; later enumeration is outside this logging boundary.</returns>
+    public override IEnumerable<dynamic?> OverrideEnumerableMethod()
+    {
+        using IDisposable? profileScope = LogThisRuntimeLogger.SelectProfile(meta.CompileTime(Profile));
+        List<KeyValuePair<string, object?>> arguments = [];
+        CaptureArguments(arguments);
+        LogThisMethodContext context = LogThisMethodContext.FromNamedArguments(
+            meta.Target.Method.Name,
+            meta.Target.Method.DeclaringType.Name,
+            [.. arguments]);
+
+        LogThisRuntimeLogger.Entry(context);
+
+        long? durationStart = LogThisRuntimeLogger.StartDuration();
+
+        try
+        {
+            var result = meta.ProceedEnumerable();
+            LogExit(context, result, LogThisRuntimeLogger.FinishDuration(durationStart));
+            return result;
+        }
+        catch (Exception exception)
+        {
+            LogThisRuntimeLogger.Exception(context, exception, LogThisRuntimeLogger.FinishDuration(durationStart));
+            throw;
+        }
+    }
+
+    /// <summary>Logs iterator creation without advancing or disposing the returned iterator.</summary>
+    /// <returns>The original iterator; later enumeration is outside this logging boundary.</returns>
+    public override IEnumerator<dynamic?> OverrideEnumeratorMethod()
+    {
+        using IDisposable? profileScope = LogThisRuntimeLogger.SelectProfile(meta.CompileTime(Profile));
+        List<KeyValuePair<string, object?>> arguments = [];
+        CaptureArguments(arguments);
+        LogThisMethodContext context = LogThisMethodContext.FromNamedArguments(
+            meta.Target.Method.Name,
+            meta.Target.Method.DeclaringType.Name,
+            [.. arguments]);
+
+        LogThisRuntimeLogger.Entry(context);
+
+        long? durationStart = LogThisRuntimeLogger.StartDuration();
+
+        try
+        {
+            var result = meta.ProceedEnumerator();
+            LogExit(context, result, LogThisRuntimeLogger.FinishDuration(durationStart));
+            return result;
+        }
+        catch (Exception exception)
+        {
+            LogThisRuntimeLogger.Exception(context, exception, LogThisRuntimeLogger.FinishDuration(durationStart));
+            throw;
+        }
+    }
+
+    /// <summary>Logs iterator creation without advancing or disposing the returned iterator.</summary>
+    /// <returns>The original iterator; later enumeration is outside this logging boundary.</returns>
+    public override IAsyncEnumerable<dynamic?> OverrideAsyncEnumerableMethod()
+    {
+        using IDisposable? profileScope = LogThisRuntimeLogger.SelectProfile(meta.CompileTime(Profile));
+        List<KeyValuePair<string, object?>> arguments = [];
+        CaptureArguments(arguments);
+        LogThisMethodContext context = LogThisMethodContext.FromNamedArguments(
+            meta.Target.Method.Name,
+            meta.Target.Method.DeclaringType.Name,
+            [.. arguments]);
+
+        LogThisRuntimeLogger.Entry(context);
+
+        long? durationStart = LogThisRuntimeLogger.StartDuration();
+
+        try
+        {
+            var result = meta.ProceedAsyncEnumerable();
+            LogExit(context, result, LogThisRuntimeLogger.FinishDuration(durationStart));
+            return result;
+        }
+        catch (Exception exception)
+        {
+            LogThisRuntimeLogger.Exception(context, exception, LogThisRuntimeLogger.FinishDuration(durationStart));
+            throw;
+        }
+    }
+
+    /// <summary>Logs iterator creation without advancing or disposing the returned iterator.</summary>
+    /// <returns>The original iterator; later enumeration is outside this logging boundary.</returns>
+    public override IAsyncEnumerator<dynamic?> OverrideAsyncEnumeratorMethod()
+    {
+        using IDisposable? profileScope = LogThisRuntimeLogger.SelectProfile(meta.CompileTime(Profile));
+        List<KeyValuePair<string, object?>> arguments = [];
+        CaptureArguments(arguments);
+        LogThisMethodContext context = LogThisMethodContext.FromNamedArguments(
+            meta.Target.Method.Name,
+            meta.Target.Method.DeclaringType.Name,
+            [.. arguments]);
+
+        LogThisRuntimeLogger.Entry(context);
+
+        long? durationStart = LogThisRuntimeLogger.StartDuration();
+
+        try
+        {
+            var result = meta.ProceedAsyncEnumerator();
+            LogExit(context, result, LogThisRuntimeLogger.FinishDuration(durationStart));
+            return result;
+        }
+        catch (Exception exception)
+        {
+            LogThisRuntimeLogger.Exception(context, exception, LogThisRuntimeLogger.FinishDuration(durationStart));
+            throw;
+        }
+    }
+
+    [Template]
+    private T ExecuteMeta<T>(Func<T> metaMethod)
+    {
+        using IDisposable? profileScope = LogThisRuntimeLogger.SelectProfile(meta.CompileTime(Profile));
+        List<KeyValuePair<string, object?>> arguments = [];
+        CaptureArguments(arguments);
+        LogThisMethodContext context = LogThisMethodContext.FromNamedArguments(
+            meta.Target.Method.Name,
+            meta.Target.Method.DeclaringType.Name,
+            [.. arguments]);
+
+        LogThisRuntimeLogger.Entry(context);
+
+        long? durationStart = LogThisRuntimeLogger.StartDuration();
+
+        try
+        {
+            T result = metaMethod();
+            LogExit(context, result, LogThisRuntimeLogger.FinishDuration(durationStart));
+            return result;
+        }
+        catch (Exception exception)
+        {
+            LogThisRuntimeLogger.Exception(context, exception, LogThisRuntimeLogger.FinishDuration(durationStart));
+            throw;
+        }
+    }
+
     #endregion
 
     #region Private Methods
+
+    /// <summary>Suppresses the generated entry-method warning while retaining cancellation metadata on the iterator.</summary>
+    /// <param name="builder">The method just instrumented by LogThis.</param>
+    [CompileTime]
+    private static void SuppressIteratorCancellationWarning(IAspectBuilder<IMethod> builder)
+    {
+        if (builder.Target.GetIteratorInfo().IsIteratorMethod != true ||
+            builder.Target.GetIteratorInfo().EnumerableKind != EnumerableKind.IAsyncEnumerable) return;
+
+        var parameters = builder.Target.Parameters.Where(parameter =>
+            parameter.Attributes.OfAttributeType(typeof(EnumeratorCancellationAttribute)).Any()).ToArray();
+        if (parameters.Length == 0 || parameters.Any(parameter =>
+            !parameter.Type.Equals(TypeFactory.GetType(typeof(CancellationToken))))) return;
+
+        // Keep the attribute: removing it also removes consumer-token handling from the deferred body.
+        // Suppress on this method only; parameter scope misses CS8424 and broader scopes hide unrelated misuse.
+        builder.Diagnostics.Suppress(IteratorCancellationWarning);
+    }
 
     // The compile-time loop emits value reads only for included, unmasked parameters.
     [Template]

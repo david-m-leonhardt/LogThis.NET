@@ -3,6 +3,24 @@ using LogThis.Middleware;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
+if (args.Contains("--cancellation-attribute-probe"))
+{
+    await CancellationAttributeChecks.RunAsync();
+    return;
+}
+
+if (args.Contains("--iterator-template-probe"))
+{
+    await IteratorTemplateChecks.RunAsync();
+    return;
+}
+
+if (args.Contains("--iterator-probe"))
+{
+    IteratorBufferingChecks.Run();
+    return;
+}
+
 var sink = new RecordingLogger();
 var services = new ServiceCollection();
 services.AddLogging(builder => builder.AddProvider(sink));
@@ -51,6 +69,9 @@ MaskInheritanceChecks.Run();
 await ReturnMaskChecks.RunAsync();
 DeferredCaptureChecks.Run();
 TruncationChecks.Run();
+IteratorBufferingChecks.Run();
+await IteratorTemplateChecks.RunAsync();
+await CancellationAttributeChecks.RunAsync();
 Console.WriteLine("All opt-out integration checks passed.");
 
 [LogThis]

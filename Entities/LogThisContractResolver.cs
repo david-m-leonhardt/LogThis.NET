@@ -31,8 +31,8 @@ internal sealed class LogThisContractResolver(HashSet<string> names, string mask
     /// <summary>Restricts already available sequences while preserving Newtonsoft's prebuilt JSON handling.</summary>
     protected override JsonContract CreateContract(Type objectType)
     {
-        if (IsEnumerable(objectType) && !typeof(JToken).IsAssignableFrom(objectType) &&
-            !objectType.IsArray && !IsOrdinaryCollection(objectType))
+        if (IsIterator(objectType) || (IsEnumerable(objectType) && !typeof(JToken).IsAssignableFrom(objectType) &&
+            !objectType.IsArray && !IsOrdinaryCollection(objectType)))
         {
             // Avoid array-contract setup and callbacks for an unsupported sequence.
             return new JsonPrimitiveContract(objectType)
@@ -118,6 +118,12 @@ internal sealed class LogThisContractResolver(HashSet<string> names, string mask
 
     /// <summary>Identifies enumerable declarations without reading values; strings retain scalar handling.</summary>
     private static bool IsEnumerable(Type type) => type != typeof(string) && typeof(IEnumerable).IsAssignableFrom(type);
+
+    /// <summary>Recognizes enumerators and asynchronous sequences before any Current or other property access.</summary>
+    private static bool IsIterator(Type type) => typeof(IEnumerator).IsAssignableFrom(type) ||
+        type.GetInterfaces().Append(type).Any(candidate => candidate.IsGenericType &&
+            (candidate.GetGenericTypeDefinition() == typeof(IAsyncEnumerable<>) ||
+             candidate.GetGenericTypeDefinition() == typeof(IAsyncEnumerator<>)));
 
     /// <summary>Allows exact ordinary collections, not custom subclasses or interface implementations.</summary>
     private static bool IsOrdinaryCollection(Type type) => type.IsGenericType &&

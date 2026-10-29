@@ -582,9 +582,9 @@ application Newtonsoft converters to write captured values, and a converter
 construction failure can suppress the affected event.
 
 These safeguards never replace or consume application values and do not affect
-serialization outside LogThis. They also do not impose collection-size limits or
-change iterator-method instrumentation. Arrays keep Newtonsoft's normal format,
-including Base64 for `byte[]`.
+serialization outside LogThis. They do not impose collection-size limits.
+Iterator lifecycle behavior is described under Behavior and limitations. Arrays
+keep Newtonsoft's normal format, including Base64 for `byte[]`.
 
 ## Configuration
 
@@ -911,9 +911,16 @@ later consumer processing.
 - `DebugLogThis` reports internal logging failures through a separate console
   logger. Those diagnostics do not use the application's configured provider,
   and failures in the diagnostic itself are suppressed.
-- The fallback Metalama template buffers iterator methods. Avoid applying
-  `[LogThis]` to long-running or unbounded iterators until iterator-specific
-  templates are available.
+- For yield-based iterator methods, entry and exit describe creating and returning
+  the iterator; exit does not mean enumeration completed. Duration excludes later
+  consumption. LogThis does not advance, buffer, read, or dispose the iterator,
+  so later enumeration exceptions and cancellation propagate directly to the
+  consumer without an exception event from the creation call.
+- Captured deferred sequences and enumerators use `"[Not enumerated]"`.
+  `[MaskReturnInLogs]` takes precedence, while disabled return capture omits the
+  component. Materialized arrays and exact lists or dictionaries retain their
+  normal capture behavior. Async iterator cancellation through
+  `[EnumeratorCancellation]` remains unchanged.
 - An exception event can include an empty return-value component, but a failed
   method has no result to log.
 

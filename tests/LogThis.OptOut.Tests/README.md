@@ -1,5 +1,17 @@
 # Opt-out integration checks
 
+Iterator checks run with the regular suite. `IteratorBufferingChecks` retains the
+original disabled-capture reproduction. `IteratorTemplateChecks` now uses production
+`LogThis` attributes instead of a prototype aspect, covering all six yield signatures
+at method and class level, partial/full/repeated consumption, failure identity,
+cancellation, disposal, creation events/duration, profile restoration, passive capture,
+return masks, and exclusions. `CancellationAttributeChecks` reuses the production
+iterator fixtures for method-only, consumer-only, and distinct linked token scenarios
+at both attribute placements. The test-only probe aspect has been removed.
+Run `tests/LogThis.Diagnostics.Tests/VerifyCancellation.ps1` to build a focused
+consumer with CS8424 treated as an error and verify invalid or unrelated annotations
+still report errors without project-wide suppression.
+
 Deferred capture checks exercise declared enumerable getters and conditional hooks,
 exact supported collections, nested sequences, object-typed properties, prebuilt
 JSON, extension-data properties, masking precedence, and profile isolation. Converter
