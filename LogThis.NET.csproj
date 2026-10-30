@@ -23,6 +23,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="LogThis.NET.AspNetCore" />
+    <InternalsVisibleTo Include="LogThis.OptOut.Tests" />
     <Compile Remove="LogThis.NET.AspNetCore\**\*.cs" />
     <Compile Remove="tests\**\*.cs" />
   </ItemGroup>

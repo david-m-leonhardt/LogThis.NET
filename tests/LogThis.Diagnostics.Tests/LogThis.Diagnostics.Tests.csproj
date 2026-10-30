@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <ErrorLog>$(MSBuildProjectDirectory)/obj/diagnostics.sarif</ErrorLog>
+    <DefineConstants Condition="'$(InvalidCancellation)' == 'true'">$(DefineConstants);INVALID_CANCELLATION</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../LogThis.NET.csproj" />
+    <Compile Include="Standalone.cs" Condition="'$(DiagnosticFixture)' != 'Cancellation'" />
+    <Compile Include="Combinations.cs" Condition="'$(DiagnosticFixture)' != 'Standalone' and '$(DiagnosticFixture)' != 'Cancellation'" />
+    <Compile Include="Cancellation.cs" Condition="'$(DiagnosticFixture)' == 'Cancellation'" />
+  </ItemGroup>
+</Project>

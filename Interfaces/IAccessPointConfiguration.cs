@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using LogThis.Enum;
+using Microsoft.Extensions.Logging;
 
 namespace LogThis.Interfaces
 {
@@ -10,6 +11,9 @@ namespace LogThis.Interfaces
         /// <summary>Text emitted for this access point.</summary>
         /// <value>The text passed as the event's structured access-point component.</value>
         string AccessPointMessage { get; set; }
+
+        /// <summary>Identifies whether this configuration describes entry, exit, or exception events.</summary>
+        AccessPointEventKind EventKind { get; }
 
         /// <summary>Whether events at this access point are enabled.</summary>
         /// <value><see langword="true"/> to emit events at this access point.</value>

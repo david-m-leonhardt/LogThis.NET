@@ -1,4 +1,5 @@
 ﻿using LogThis.Constants;
+using LogThis.Enum;
 using Microsoft.Extensions.Logging;
 
 namespace LogThis.Entities
@@ -10,7 +11,10 @@ namespace LogThis.Entities
 
         /// <summary>Default exception message.</summary>
         /// <value><c>Exception</c> unless overridden.</value>
-        public override string AccessPointMessage { get; set; } = AccessPointConstants.ExceptionMessage;
+        public override string AccessPointMessage { get; set; } = AccessPoint.ExceptionMessage;
+
+        /// <inheritdoc />
+        public override AccessPointEventKind EventKind => AccessPointEventKind.Exception;
 
         /// <summary>Exceptions are logged at Error level by default.</summary>
         /// <value>Error unless overridden.</value>

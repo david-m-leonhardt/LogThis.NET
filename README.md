@@ -6,7 +6,8 @@ applications keep control of their logging provider, and Metalama to weave the
 logging code at build time.
 
 > [!IMPORTANT]
-> LogThis.NET 1.0.0 is the first stable release.
+> This documentation targets LogThis.NET 1.1.0-beta.1. LogThis.NET 1.0.0 is
+> the latest stable release.
 
 ## Requirements
 
@@ -26,13 +27,13 @@ Two packages are available:
 For a console application, worker, or other non-HTTP host:
 
 ```powershell
-dotnet add package LogThis.NET --version 1.0.0
+dotnet add package LogThis.NET --version 1.1.0-beta.1
 ```
 
 For an ASP.NET Core application:
 
 ```powershell
-dotnet add package LogThis.NET.AspNetCore --version 1.0.0
+dotnet add package LogThis.NET.AspNetCore --version 1.1.0-beta.1
 ```
 
 Applications using `[LogThis]` must be built with the .NET 10 SDK so Metalama
@@ -65,6 +66,133 @@ category other than the default `LogThis` category, pass it to the middleware:
 ```csharp
 app.UseLogThis("MyApplication.Methods");
 ```
+
+Apply `[LogThis]` to a method that should emit entry, exit, and exception
+events:
+
+```csharp
+using LogThis.Attributes;
+
+public class OrdersService
+{
+    [LogThis]
+    public async Task<Order> SubmitOrderAsync(OrderRequest request)
+    {
+        // Method implementation
+    }
+}
+```
+
+See [Attributes](#attributes) for class-level logging, exclusions, and
+sensitive-property masking.
+
+## Logging provider setup
+
+LogThis.NET writes through `Microsoft.Extensions.Logging`; it does not require
+an `ILogger` instance to be passed during registration. Configure a logging
+provider on the host, and then call `AddLogThisConfiguration()`. When
+`UseLogThis()` opens a request scope, LogThis uses the DI-managed
+`ILoggerFactory` to create its category logger.
+
+The following examples show the relevant startup registration for common
+providers. After any ASP.NET Core example, build the application and add the
+LogThis middleware as shown in the quick start:
+
+```csharp
+WebApplication app = builder.Build();
+
+app.UseLogThis();
+app.MapControllers();
+
+app.Run();
+```
+
+### Built-in console logger
+
+The console provider is useful for a minimal setup and local development:
+
+```csharp
+using LogThis.Middleware;
+using Microsoft.Extensions.Logging;
+
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Logging.AddSimpleConsole(options => options.SingleLine = true);
+
+builder.Services.AddLogThisConfiguration();
+builder.Services.AddControllers();
+```
+
+ASP.NET Core includes the console provider. A non-hosted console application can
+register it with `services.AddLogging(logging => logging.AddConsole())`, as
+shown in the next section.
+
+### log4net
+
+Install `Microsoft.Extensions.Logging.Log4Net.AspNetCore`, add a
+`log4net.config` file, and copy that file to the output directory:
+
+```csharp
+using LogThis.Middleware;
+using Microsoft.Extensions.Logging;
+
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Logging.AddLog4Net();
+
+builder.Services.AddLogThisConfiguration();
+builder.Services.AddControllers();
+```
+
+The logging provider's default configuration filename is `log4net.config`.
+
+### Serilog
+
+Install `Serilog.AspNetCore` and the sinks required by the application. This
+example uses the console sink:
+
+```csharp
+using LogThis.Middleware;
+using Serilog;
+
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddSerilog((services, loggerConfiguration) =>
+    loggerConfiguration
+        .ReadFrom.Configuration(builder.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .WriteTo.Console());
+
+builder.Services.AddLogThisConfiguration();
+builder.Services.AddControllers();
+```
+
+`AddSerilog()` routes events from `Microsoft.Extensions.Logging`, including
+LogThis events, through the Serilog pipeline.
+
+### NLog
+
+Install `NLog.Web.AspNetCore` and add an `NLog.config` file:
+
+```csharp
+using LogThis.Middleware;
+using NLog.Web;
+
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Host.UseNLog();
+
+builder.Services.AddLogThisConfiguration();
+builder.Services.AddControllers();
+```
+
+`UseNLog()` connects the host's `Microsoft.Extensions.Logging` pipeline to
+NLog. Provider-specific targets, levels, and formatting remain the
+application's responsibility.
 
 ## Console applications and background services
 
@@ -114,10 +242,21 @@ The same operation is available by resolving `ILogThisScopeFactory` and calling
 background service's `ExecuteAsync` method. Marked methods called without an
 active scope do not produce LogThis events.
 
-## Applying `[LogThis]`
+## Attributes
 
-Apply the attribute to one method or to a class. A class-level attribute wraps
-each public, non-abstract method:
+LogThis.NET provides four consumer-facing attributes:
+
+- `[LogThis]` enables method-boundary logging.
+- `[DontLogThis]` excludes a method or captured value.
+- `[MaskThisInLogs]` replaces a captured parameter or property value with safe
+  text.
+- `[MaskReturnInLogs]` replaces a captured successful return value with safe
+  text.
+
+### `[LogThis]`
+
+As shown in the quick start, `[LogThis]` can target one method. Apply it to a
+class to wrap each public, non-abstract method:
 
 ```csharp
 using LogThis.Attributes;
@@ -125,17 +264,15 @@ using LogThis.Attributes;
 [LogThis]
 public class OrdersService
 {
-    public async Task<Order> SubmitOrderAsync(OrderRequest request)
-    {
-        // Method implementation
-    }
+    public void SubmitOrder(OrderRequest request) { }
 }
 ```
 
 Awaitable methods log their exit after completion and log exceptions thrown
 during the await.
 
-The default events are:
+Each access point is enabled by default with the following level and
+`AccessPointMessage`:
 
 | Event | Level | Message |
 | --- | --- | --- |
@@ -143,9 +280,311 @@ The default events are:
 | Exit | `Information` | `Exited` |
 | Exception | `Error` | `Exception` |
 
+`Entered`, `Exited`, and `Exception` are defaults, not fixed labels. Change
+them independently through `OnEntryConfig.AccessPointMessage`,
+`OnExitConfig.AccessPointMessage`, and
+`OnExceptionConfig.AccessPointMessage`.
+
 The method name is included by default, and message components are separated by
-` | `. Class names, arguments, return values, and custom properties are omitted
-until enabled.
+` | `. Class names, arguments, return values, duration, and custom properties
+are omitted until enabled. Correlation IDs and readable component labels are
+enabled by default.
+
+### `[DontLogThis]`
+
+`[DontLogThis]` opts specific methods or data out of LogThis without changing
+application behavior. Apply it to:
+
+- a method to suppress that method's entry, exit, and exception events
+- a parameter to omit it from captured arguments
+- a property to omit it whenever its containing object is captured
+
+Exclusion means omission. It does not replace a value with masking text, disable
+logging in called methods, or affect explicit application `ILogger` calls.
+
+#### Excluding a method
+
+Use `[DontLogThis]` on a method that would otherwise be included by a
+class-level or method-level `[LogThis]`:
+
+```csharp
+[LogThis]
+public class OrderService(ILogger<OrderService> logger)
+{
+    [DontLogThis]
+    public void SubmitOrder()
+    {
+        logger.LogInformation("Submitting order");
+        ValidateOrder();
+    }
+
+    public void ValidateOrder() { }
+}
+```
+
+LogThis emits no events for `SubmitOrder`, but the explicit log statement still
+runs and `ValidateOrder` follows its own instrumentation rules. Return values,
+async behavior, and exception propagation are unchanged. If an instrumented
+caller observes an exception from an excluded method, that caller can still log
+its own exception event.
+
+A method exclusion takes precedence over `[LogThis]` on the same method and
+applies only to that method. Annotate overloads, overrides, and interface
+implementations separately. Classes and constructors cannot be marked with
+`[DontLogThis]`.
+
+#### Excluding parameters and properties
+
+The same `[DontLogThis]` attribute can omit a parameter from argument capture
+or a property from object capture:
+
+```csharp
+using LogThis.Attributes;
+
+public class OrderRequest
+{
+    public string OrderId { get; set; } = "";
+
+    [DontLogThis]
+    public string PaymentToken { get; set; } = "";
+}
+
+[LogThis]
+public class CheckoutService
+{
+    public OrderRequest Submit(OrderRequest request, [DontLogThis] string apiKey)
+    {
+        // Normal application code can still use request.PaymentToken and apiKey.
+        return request;
+    }
+}
+```
+
+With argument logging enabled, `apiKey` is absent from the argument JSON. If
+every parameter is excluded, the component contains `{}`. `PaymentToken` is
+omitted from any captured `OrderRequest`, including nested objects and
+collection items.
+
+LogThis excludes ordinary properties before serialization and does not invoke
+their getters. It does not modify application objects, results, or exceptions.
+Parameter and property exclusions matter only when the corresponding argument
+or return-value capture is enabled.
+
+`[DontLogThis]` governs LogThis capture only. It cannot remove a value that the
+application writes through its own logger or embeds in exception text.
+
+#### Named argument output
+
+Parameter names come from method metadata at build time and are paired with
+their values when the method is called. For example:
+
+```csharp
+[LogThis]
+public void Authenticate(string username, [DontLogThis] string password, bool rememberMe)
+{
+    // Application code
+}
+```
+
+With `LogMethodArguments = true`, calling `Authenticate("alice", "secret", true)`
+produces this argument component on entry (and on an exception event if it throws):
+
+```text
+Arguments: {"username":"alice","rememberMe":true}
+```
+
+Null included arguments retain their names with a `null` value. Property
+exclusions and `JsonFieldsToMask` still apply within each included value;
+parameter names themselves do not expand the property-masking rules. Use
+`[DontLogThis]` to omit a parameter. Disabling argument logging omits the entire
+argument component and avoids serialization, while configured events continue.
+
+The structured `{LogThisArguments}` property contains the complete JSON string,
+not one logger property per parameter. Renaming a source parameter changes its
+JSON key after rebuilding.
+
+### `[MaskThisInLogs]`
+
+Use `[MaskThisInLogs]` on a parameter or property that should remain present in
+captured data without exposing its value. Without an argument, it uses the
+selected profile's `JsonMaskValue` (`*****` by default). Passing a string uses
+that fixed replacement; an empty string is valid.
+An explicitly null replacement is invalid.
+
+#### Masking parameters
+
+A masked parameter retains its name while its entire value is replaced:
+
+```csharp
+[LogThis]
+public void Authenticate(
+    [MaskThisInLogs] string password,
+    [MaskThisInLogs("[TOKEN]")] string token)
+{
+    // Application code still receives the original password and token.
+}
+```
+
+With argument capture enabled and the default mask, the argument component is:
+
+```text
+Arguments: {"password":"*****","token":"[TOKEN]"}
+```
+
+Nulls, objects, and collections are replaced without inspecting their contents.
+The mask applies to that method's entry and exception argument capture; it does
+not follow the value into return capture or another method call.
+
+`[DontLogThis]` takes precedence and removes both the parameter name and value.
+`JsonFieldsToMask` continues to match serialized property names, not parameter
+names.
+
+#### Masking properties
+
+Annotate model properties whose values may appear in captured arguments or
+return values:
+
+```csharp
+public class LoginRequest
+{
+    [MaskThisInLogs]
+    public string Password { get; init; } = "";
+
+    [MaskThisInLogs("[PRIVATE]")]
+    public CustomerDetails Customer { get; init; } = new();
+}
+```
+
+Property masking applies to nested objects and collection items. LogThis
+replaces the entire property value without invoking an ordinary property getter.
+It does not modify the original object.
+
+`[DontLogThis]` takes precedence and omits the property. An explicit
+`[MaskThisInLogs("...")]` value takes precedence over configuration-based
+masking.
+
+An inherited property keeps its annotation when used unchanged. An override or
+`new` hiding property is a new declaration and must be annotated separately.
+Configuration-based property masking can still apply when an annotation is not
+present.
+
+### `[MaskReturnInLogs]`
+
+Use this method-only attribute to replace an entire successful return value
+captured by LogThis:
+
+```csharp
+[LogThis]
+[MaskReturnInLogs]
+public string CreateToken() => "application token";
+
+[LogThis]
+[MaskReturnInLogs("[TOKEN]")]
+public Task<string> CreateTokenAsync() => Task.FromResult("application token");
+```
+
+The first method uses the selected profile's `JsonMaskValue`; the second uses
+the literal `[TOKEN]`. Empty replacements are valid, and null and non-null
+results receive the same mask. The structured `LogThisReturnValue` remains a
+JSON string, such as `"[TOKEN]"`.
+
+LogThis does not inspect or serialize a masked result, and application code
+receives the original value and object identity. Async methods mask their normal
+awaited result. Overrides require their own annotation.
+
+The attribute has an effect only when the method is instrumented and return
+capture, its exit event, and its log level are enabled. Failed calls continue to
+emit exception events without a fabricated result. `[DontLogThis]` takes
+precedence.
+
+An explicitly null replacement is invalid. Applying the attribute to a method
+without a usable result, such as `void`, `Task`, or `ValueTask`, has no effect
+and produces a build warning.
+
+### Attribute warnings
+
+Metalama reports invalid or ineffective attribute combinations during the
+consumer build:
+
+| ID | Severity | Condition | Resolution |
+| --- | --- | --- | --- |
+| `LOGTHIS001` | Error | `[MaskReturnInLogs(null)]` supplies an explicit null replacement. | Omit the argument to use `JsonMaskValue`, or provide a string. |
+| `LOGTHIS002` | Warning | `[MaskReturnInLogs]` targets a method without a usable result. | Remove the attribute or return a value that can be captured. |
+| `LOGTHIS003` | Warning | A method has both `[LogThis]` and `[DontLogThis]`. | Remove the ineffective `[LogThis]`, or remove the exclusion. |
+| `LOGTHIS004` | Warning | A method has both `[MaskReturnInLogs]` and `[DontLogThis]`. | Remove the ineffective mask, or remove the exclusion. |
+| `LOGTHIS005` | Warning | A parameter or property has both `[MaskThisInLogs]` and `[DontLogThis]`. | Remove the ineffective mask, or remove the exclusion. |
+| `LOGTHIS006` | Warning | A method repeats the profile already selected by its `[LogThis]` class. | Remove the method attribute, or select a different profile. |
+
+`[DontLogThis]` remains authoritative when conflicting attributes are present.
+Class-level `[LogThis]` with method-level `[DontLogThis]` is a supported
+opt-out and does not itself produce a warning.
+
+Profile names are trimmed and compared case-insensitively when checking for a
+redundant method selection. A method may still override a named class profile by
+explicitly selecting the default or a different profile. Applications can
+suppress or promote these diagnostics through their normal compiler settings.
+
+## Sensitive-data masking
+
+Use `JsonFieldsToMask` for models that cannot be annotated, or to apply a
+shared rule by serialized property name:
+
+```csharp
+builder.Services.AddLogThisConfiguration(options =>
+{
+    options.JsonFieldsToMask = ["Password", "AuthToken"];
+    options.JsonMaskValue = "*****";
+    options.LogMethodArguments = true;
+    options.LogMethodReturnValue = true;
+});
+```
+
+Matching is case-insensitive and applies at any nesting depth, including objects
+inside arrays. A match replaces the property's entire value. Dotted paths,
+wildcards, and partial-value masking are not supported.
+
+For captured properties, masking precedence is:
+
+1. `[DontLogThis]` omits the property.
+2. `[MaskThisInLogs("replacement")]` uses its explicit replacement.
+3. `[MaskThisInLogs]` or a configured name match uses `JsonMaskValue`.
+
+Parameter masks and `[MaskReturnInLogs]` apply directly to their annotated
+parameter or method and do not use `JsonFieldsToMask`.
+
+For ordinary object properties, attribute and configured-name masking occur
+without invoking the matched getter. Dictionary entries and existing JSON objects
+can require serialization or traversal before a configuration-based match is
+replaced. Disabled argument or return-value capture performs no masking work.
+
+Masking protects only LogThis-captured data. Unlisted properties remain
+unchanged, and application-authored logs or exception messages can still expose
+their values. Enable argument and return-value logging only when appropriate for
+the application's data and volume.
+
+### Enumerable capture safeguards
+
+LogThis avoids starting deferred work merely to create a log event. Properties
+declared as `IEnumerable` or a collection type are not read and appear as
+`"[Not read]"`. `[DontLogThis]` still omits the property, and masking attributes
+or configured names still take precedence.
+
+Values already supplied to capture follow their runtime type. Arrays, exact
+`List<T>` and `Dictionary<TKey, TValue>` instances, strings, and existing
+`JToken` values serialize normally. Other enumerable values appear as
+`"[Not enumerated]"` without enumeration, count inspection, or `ToString()`.
+The same rules apply inside captured object graphs.
+
+A sequence hidden behind an `object` property cannot be identified before its
+getter runs. Ordinary getters, serialization callbacks, converter constructors,
+and dictionary-key conversion can therefore still execute. LogThis does not use
+application Newtonsoft converters to write captured values, and a converter
+construction failure can suppress the affected event.
+
+These safeguards never replace or consume application values and do not affect
+serialization outside LogThis. They do not impose collection-size limits.
+Iterator lifecycle behavior is described under Behavior and limitations. Arrays
+keep Newtonsoft's normal format, including Base64 for `byte[]`.
 
 ## Configuration
 
@@ -162,6 +601,7 @@ builder.Services.AddLogThisConfiguration(options =>
     options.LogClassName = true;
     options.LogMethodArguments = true;
     options.LogMethodReturnValue = true;
+    options.LogMethodDuration = true;
     options.OnEntryConfig.LogLevel = LogLevel.Debug;
     options.OnEntryConfig.AccessPointMessage = "Starting";
     options.OnExceptionConfig.AccessPointMessage = "Failed";
@@ -187,6 +627,7 @@ LogThis automatically reads the `LogThis` section from a registered
     "LogClassName": true,
     "LogMethodArguments": true,
     "LogMethodReturnValue": true,
+    "LogMethodDuration": true,
     "JsonFieldsToMask": ["Password", "AuthToken"],
     "JsonMaskValue": "[REDACTED]",
     "MessageComponents": {
@@ -215,19 +656,111 @@ provider; file reloads do not update an active provider.
 An application can also pass a specific `IConfigurationSection` or a prepared
 `LogThisConfiguration` instance to `AddLogThisConfiguration`.
 
+### Named configuration profiles
+
+The default configuration is always available. Add profiles under `LogThis:Profiles`
+to give selected methods a different complete configuration:
+
+```json
+{
+  "LogThis": {
+    "LogClassName": true,
+    "OnEntryConfig": { "AccessPointMessage": "Starting" },
+    "Profiles": {
+      "Detailed": {
+        "LogMethodArguments": true,
+        "LogMethodReturnValue": true,
+        "LogMethodDuration": true,
+        "JsonFieldsToMask": ["Password", "AuthToken"]
+      },
+      "ExternalCall": {
+        "LogMethodDuration": true,
+        "OnEntryConfig": { "LogAccessPoint": false },
+        "OnExceptionConfig": { "AccessPointMessage": "External call failed" }
+      }
+    }
+  }
+}
+```
+
+`AddLogThisConfiguration()` loads both the default settings and named profiles.
+Each profile is a complete configuration built from library defaults; it does
+not inherit the application's default configuration or another profile. In this
+example, `Detailed` still uses `LogClassName = false` and the default entry
+message `Entered`.
+
+Profiles can also be registered in code:
+
+```csharp
+builder.Services.AddLogThisConfiguration();
+builder.Services.AddLogThisProfile("Detailed", options =>
+{
+    options.LogMethodArguments = true;
+    options.LogMethodDuration = true;
+});
+builder.Services.AddLogThisProfile("ExternalCall", new LogThisConfiguration
+{
+    LogMethodDuration = true
+});
+```
+
+A callback extends a matching JSON profile, or starts from library defaults
+when no matching JSON exists. Passing a `LogThisConfiguration` instance supplies
+the complete profile. Names are trimmed and matched case-insensitively; empty
+names and duplicate code definitions are rejected.
+
+Select a profile on the class or method:
+
+```csharp
+[LogThis(Profile = "Detailed")]
+public class OrderService
+{
+    public void Submit() { } // Detailed
+
+    [LogThis]
+    public void CheckStatus() { } // Default
+
+    [LogThis(Profile = "ExternalCall")]
+    public void Send() { } // ExternalCall
+
+    [DontLogThis]
+    public void Ignore() { } // No generated events
+}
+```
+
+A method-level `[LogThis]` overrides the class-level selection. An explicit
+method attribute without `Profile` selects the default configuration.
+`[DontLogThis]` always takes precedence, and profile selections are never
+merged.
+
+The selected profile controls all logging and masking options.
+`[MaskThisInLogs]` without an explicit replacement uses that profile's
+`JsonMaskValue`.
+
+Profiles are validated when the scope factory is first resolved. An unknown
+profile throws `InvalidOperationException` when its method is called inside an
+active LogThis scope; LogThis does not silently fall back to the default.
+
 ### Options
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `LogClassName` | `false` | Adds the declaring class as `{Class}`. |
-| `LogMethodName` | `true` | Adds the method as `{Method}`. |
-| `LogMethodArguments` | `false` | Adds `{Arguments}` to entry and exception events. |
-| `LogMethodReturnValue` | `false` | Adds `{ReturnValue}` to exit events and an empty value to exception events. |
-| `MessageDelimeter` | Space, pipe, space | Separates placeholders in the message template. |
-| `MessageComponents` | Empty | Adds custom structured properties to every event. |
+| `DebugLogThis` | `false` | Enables best-effort console diagnostics for internal LogThis failures. |
 | `JsonFieldsToMask` | Empty | Lists JSON property names to redact. |
 | `JsonMaskValue` | `"*****"` | Sets the replacement for redacted values. |
-| `DebugLogThis` | `false` | Enables best-effort console diagnostics for internal LogThis failures. |
+| `TruncateCapturedValues` | `true` | Wraps oversized completed captures with a preview. Disable for unlimited output. |
+| `MaxCapturedValueLength` | `4096` | Positive preview length in UTF-16 units, excluding wrapper/escaping overhead. |
+| `LogClassName` | `false` | Adds the declaring class as `{LogThisClass}`. |
+| `LogComponentLabels` | `true` | Adds descriptive labels such as `Class:` and `Method:` to rendered components. |
+| `LogCorrelationId` | `true` | Lazily obtains the chain's ID for eligible events and adds `{LogThisCorrelationId}`. |
+| `LogMethodName` | `true` | Adds the method as `{LogThisMethod}`. |
+| `LogMethodArguments` | `false` | Adds `{LogThisArguments}` to entry and exception events. |
+| `LogMethodReturnValue` | `false` | Adds `{LogThisReturnValue}` to exit events and an empty value to exception events. |
+| `LogMethodDuration` | `false` | Adds numeric `{LogThisDurationMs}` to existing exit and exception events. |
+| `LogSpanId` | `false` | Includes an existing W3C activity span ID as `{LogThisSpanId}`. |
+| `LogTraceId` | `false` | Includes an existing W3C activity trace ID as `{LogThisTraceId}`. |
+| `MessageDelimeter` | Space, pipe, space | Separates placeholders in the message template. |
+| `MessageComponents` | Empty | Adds custom structured properties to every event. |
 
 `OnEntryConfig`, `OnExceptionConfig`, and `OnExitConfig` each provide:
 
@@ -235,29 +768,140 @@ An application can also pass a specific `IConfigurationSection` or a prepared
 - `LogLevel` to select its severity
 - `AccessPointMessage` to change its message
 
-## Sensitive-data masking
+Custom `IAccessPointConfiguration` implementations must return the appropriate
+entry, exit, or exception `EventKind`.
 
-When argument or return-value logging is enabled, LogThis serializes those
-values. Every property whose name matches `JsonFieldsToMask`, ignoring case, is
-replaced with `JsonMaskValue` at any nesting depth:
+### Captured-content truncation
+
+Captured argument and return-value output is limited by default.
+`TruncateCapturedValues` is `true`, and `MaxCapturedValueLength` is `4096`.
+Both settings can be configured on the default or a named profile:
 
 ```csharp
 builder.Services.AddLogThisConfiguration(options =>
 {
-    options.JsonFieldsToMask = ["Password", "AuthToken"];
-    options.JsonMaskValue = "*****";
-    options.LogMethodArguments = true;
-    options.LogMethodReturnValue = true;
+    options.MaxCapturedValueLength = 2048;
+});
+builder.Services.AddLogThisProfile("FullCapture", options =>
+{
+    options.TruncateCapturedValues = false;
 });
 ```
 
-The rule also applies to objects in nested arrays, and a match replaces the
-property's entire value. Dotted paths, wildcards, and partial-value masking are
-not supported. Original objects are not modified.
+Only positive lengths are valid, even when truncation is disabled. Invalid
+lengths are rejected when configuration is resolved. Set
+`TruncateCapturedValues` to `false` for unlimited captured output.
 
-Do not rely on masking alone to protect sensitive information: fields not on
-the list are logged unchanged. Enable argument and return-value logging only
-when it is appropriate for the application's data and volume.
+Masking and serialization occur before LogThis applies separate limits to the
+combined argument payload and return-value payload. Text within the limit is
+unchanged. An oversized capture becomes a valid JSON wrapper:
+
+```json
+{"truncated":true,"preview":"{\"username\":\"al"}
+```
+
+`preview` contains partial serialized text, not a complete JSON document. Its
+limit uses .NET string-length units (UTF-16) and never splits a surrogate pair;
+the wrapper and JSON escaping add overhead beyond the configured length. Masks
+and exclusions, including whole-return masks, are applied first.
+
+The limit does not bound the entire event, encoded byte size, serialization
+work, or memory use. Labels, identifiers, custom components, and exception text
+are unaffected. Consumers that parse captured structured strings must recognize
+the wrapper or disable truncation. Custom `ILogThisConfiguration`
+implementations must provide both truncation properties.
+
+### Component labels and access-point messages
+
+`LogComponentLabels` defaults to `true` and controls descriptive text such as
+`Class:`, `Method:`, `Arguments:`, and `Duration ms:`. Set it to `false` in code
+or JSON to omit these labels.
+
+`LogComponentLabels` does not control the access-point message at the beginning
+of an event. Entry, exit, and exception messages remain independently
+configurable through each event's `AccessPointMessage`; `Entered`, `Exited`,
+and `Exception` are only their defaults.
+
+For an exit event with class and method enabled, correlation disabled, and the
+default exit message:
+
+```text
+Enabled:  Exited | Class: OrderService | Method: SubmitAsync
+Disabled: Exited | OrderService | SubmitAsync
+```
+
+Disabling labels does not change component order, delimiters, structured
+properties, or event selection. Custom components receive no automatic label,
+and the logging provider remains responsible for whole-event formatting.
+
+### Custom component validation and lifetime
+
+Custom component names must not conflict with these library-owned structured
+properties, regardless of case or whether the related feature is enabled:
+
+- `LogThisOnEntry`, `LogThisOnExit`, `LogThisOnException`
+- `LogThisClass`, `LogThisMethod`, `LogThisArguments`, `LogThisReturnValue`
+- `LogThisDurationMs`, `LogThisCorrelationId`
+- `LogThisTraceId`, `LogThisSpanId`
+
+These are structured property names, not public constants. Other names,
+including `LogThisCustom`, `Method`, and `CorrelationId`, are allowed. Bare names
+and single brace-wrapped placeholders are normalized; reserved, duplicate, or
+malformed names throw `ArgumentException`.
+
+Configure custom components before the first LogThis scope is created. The scope
+factory takes a shallow snapshot of the dictionary, so later additions, removals,
+or replacements do not affect that service provider's events.
+
+### Correlation IDs
+
+Correlation is enabled by default. LogThis generates a 16-character,
+case-sensitive `LogThisCorrelationId` when the first eligible event needs it.
+Set `LogCorrelationId` to `false` in code or JSON to omit it. Disabled or
+filtered events do not trigger ID generation.
+
+Nested scopes, profile selections, and async continuations share the same
+correlation state. Once generated, enabled events in that operation reuse the
+same ID; independent outermost scopes receive independent IDs.
+
+Only LogThis-generated events are enriched. The ID is independent of incoming
+headers and `Activity.TraceId`. ASP.NET Core middleware creates one chain per
+request; workers should open one scope per job or message when separate chains
+are required.
+
+### Activity trace and span IDs
+
+LogThis can add identifiers from the current W3C
+`System.Diagnostics.Activity` to its method events:
+
+```csharp
+builder.Services.AddLogThisConfiguration(options =>
+{
+    options.LogTraceId = true;
+    options.LogSpanId = true;
+});
+```
+
+Both options default to `false` and work independently. `LogThisTraceId`
+contains the complete 32-character hexadecimal trace ID, while
+`LogThisSpanId` contains the complete 16-character hexadecimal span ID. The
+selected method profile determines which fields are included. LogThis reads
+`Activity.Current` for each eligible event and omits missing, non-W3C, or invalid
+identifiers. It does not create activities, change tracing behavior, or enrich
+application-authored logs. These identifiers are independent of
+`LogThisCorrelationId`.
+
+### Optional method duration
+
+Set `LogMethodDuration` to `true` in code or JSON to add numeric
+`LogThisDurationMs` to enabled exit and exception events. It is disabled by
+default and does not enable events or change their severity.
+
+Duration is elapsed milliseconds, including asynchronous waits and child calls,
+measured after entry logging and before completion-event logging. The rendered
+component is similar to `Duration ms: 12.34`, while the structured value remains
+a number. For deferred sequences, duration covers the method call rather than
+later consumer processing.
 
 ## Behavior and limitations
 
@@ -267,9 +911,16 @@ when it is appropriate for the application's data and volume.
 - `DebugLogThis` reports internal logging failures through a separate console
   logger. Those diagnostics do not use the application's configured provider,
   and failures in the diagnostic itself are suppressed.
-- The fallback Metalama template buffers iterator methods. Avoid applying
-  `[LogThis]` to long-running or unbounded iterators until iterator-specific
-  templates are available.
+- For yield-based iterator methods, entry and exit describe creating and returning
+  the iterator; exit does not mean enumeration completed. Duration excludes later
+  consumption. LogThis does not advance, buffer, read, or dispose the iterator,
+  so later enumeration exceptions and cancellation propagate directly to the
+  consumer without an exception event from the creation call.
+- Captured deferred sequences and enumerators use `"[Not enumerated]"`.
+  `[MaskReturnInLogs]` takes precedence, while disabled return capture omits the
+  component. Materialized arrays and exact lists or dictionaries retain their
+  normal capture behavior. Async iterator cancellation through
+  `[EnumeratorCancellation]` remains unchanged.
 - An exception event can include an empty return-value component, but a failed
   method has no result to log.
 

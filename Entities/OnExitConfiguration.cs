@@ -1,4 +1,5 @@
 ﻿using LogThis.Constants;
+using LogThis.Enum;
 
 namespace LogThis.Entities
 {
@@ -9,7 +10,10 @@ namespace LogThis.Entities
 
         /// <summary>Default successful-exit message.</summary>
         /// <value><c>Exited</c> unless overridden.</value>
-        public override string AccessPointMessage { get; set; } = AccessPointConstants.ExitMessage;
+        public override string AccessPointMessage { get; set; } = AccessPoint.ExitMessage;
+
+        /// <inheritdoc />
+        public override AccessPointEventKind EventKind => AccessPointEventKind.Exit;
 
         #endregion
     }

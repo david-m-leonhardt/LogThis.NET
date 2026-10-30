@@ -15,7 +15,7 @@ public static class LogThisAspNetCoreMiddleware
         /// <summary>Adds HTTP scope middleware using the default logger category.</summary>
         public void UseLogThis()
         {
-            UseLogThis(app, MessageComponentConstants.DefaultCategoryName);
+            UseLogThis(app, MessageComponents.DefaultCategoryName);
         }
 
         /// <summary>Opens an independent ambient scope around each ASP.NET Core request.</summary>

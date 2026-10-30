@@ -10,20 +10,45 @@
         bool DebugLogThis { get; set; }
 
         /// <summary>Case-insensitive JSON property names to redact at any depth in logged values.</summary>
+        /// <remarks>Ordinary property matches skip getters and emit a whole-value replacement even for nulls. Explicit MaskThisInLogs replacements take precedence; DontLogThis omits properties. Dictionary/JSON masking retains a post-serialization fallback.</remarks>
         /// <value>The field names supplied by the application.</value>
         List<string> JsonFieldsToMask { get; set; }
 
         /// <summary>Replacement text used for masked JSON fields.</summary>
+        /// <remarks>Also used by MaskThisInLogs without an explicit replacement. Applies per capture without mutating application values.</remarks>
         /// <value>The text substituted for each matched field value.</value>
         string JsonMaskValue { get; set; }
+
+        /// <summary>Limits completed captured payloads after masking; false permits unlimited output.</summary>
+        /// <value><see langword="true"/> by default.</value>
+        bool TruncateCapturedValues { get; set; }
+
+        /// <summary>Positive preview length in .NET string-length units, excluding wrapper and escaping overhead.</summary>
+        /// <remarks>Required to be positive even when truncation is disabled; surrogate pairs are not split.</remarks>
+        /// <value>4096 by default.</value>
+        int MaxCapturedValueLength { get; set; }
 
         /// <summary>Whether to include the declaring class name.</summary>
         /// <value><see langword="true"/> to add a class component.</value>
         bool LogClassName { get; set; }
 
+        /// <summary>Includes friendly component labels in message templates without changing structured values.</summary>
+        /// <value><see langword="true"/> by default.</value>
+        bool LogComponentLabels { get; set; }
+
+        /// <summary>Includes the chain's correlation ID, generating it lazily for the first eligible event that needs it.</summary>
+        /// <remarks>The 16-character cryptographic alphanumeric ID is case-sensitive and shared across nested scopes, profiles, and awaits. Disabled or filtered events do not request an ID. One generation attempt is made per chain; failure permits logging without an ID, with best-effort debug diagnostics. Only LogThis events are enriched.</remarks>
+        /// <value><see langword="true"/> by default.</value>
+        bool LogCorrelationId { get; set; }
+
         /// <summary>Whether to include serialized method arguments.</summary>
         /// <value><see langword="true"/> to add arguments to entry and exception events.</value>
         bool LogMethodArguments { get; set; }
+
+        /// <summary>Includes numeric DurationMs on enabled exit and exception events.</summary>
+        /// <remarks>Measures elapsed time, including asynchronous waits and child calls, excluding entry and completion logging.</remarks>
+        /// <value><see langword="false"/> by default.</value>
+        bool LogMethodDuration { get; set; }
 
         /// <summary>Whether to include the method name.</summary>
         /// <value><see langword="true"/> to add a method-name component.</value>
@@ -34,7 +59,24 @@
         /// <value><see langword="true"/> to add a return-value component.</value>
         bool LogMethodReturnValue { get; set; }
 
+        /// <summary>Includes the current W3C activity's 16-character hexadecimal span ID as LogThisSpanId.</summary>
+        /// <remarks>Reads existing activity context per eligible event without creating spans. Independent of LogTraceId; absent, non-W3C, or invalid context is omitted.</remarks>
+        /// <value><see langword="false"/> by default.</value>
+        bool LogSpanId { get; set; }
+
+        /// <summary>Includes the current W3C activity's 32-character hexadecimal trace ID as LogThisTraceId.</summary>
+        /// <remarks>Reads existing activity context per eligible event without creating tracing. Independent of LogSpanId; absent, non-W3C, or invalid context is omitted.</remarks>
+        /// <value><see langword="false"/> by default.</value>
+        bool LogTraceId { get; set; }
+
         /// <summary>Custom properties added to every log event.</summary>
+        /// <remarks>
+        /// Names are validated at configuration resolution and copied when the scope factory is created.
+        /// Later dictionary edits no longer affect that factory's events; referenced values are not cloned.
+        /// Reserved names (case-insensitive, with or without braces) are LogThisOnEntry, LogThisOnExit,
+        /// LogThisOnException, LogThisClass, LogThisMethod, LogThisArguments, LogThisReturnValue,
+        /// LogThisDurationMs, LogThisCorrelationId, LogThisTraceId, and LogThisSpanId, even when the corresponding feature is disabled.
+        /// </remarks>
         /// <value>Message-template placeholders mapped to their values.</value>
         Dictionary<string, object> MessageComponents { get; }
 
