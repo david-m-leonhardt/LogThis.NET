@@ -13,7 +13,7 @@ namespace LogThis.Constants
         [CompileTime]
         internal static readonly DiagnosticDefinition NullReturnMask = new("LOGTHIS001", Severity.Error,
             "MaskReturnInLogs replacement cannot be null. Omit the argument to use JsonMaskValue.");
-        
+
         /// <summary>Warns when an instrumented method has no usable result to mask.</summary>
         [CompileTime]
         internal static readonly DiagnosticDefinition NoReturnToMask = new("LOGTHIS002", Severity.Warning,

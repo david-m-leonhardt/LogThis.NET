@@ -12,8 +12,8 @@ namespace LogThis.Middleware
     {
         #region Private Properties
 
-    /// <summary>Root configuration section used for default settings and named profiles.</summary>
-    private const string sectionKey = "LogThis";
+        /// <summary>Root configuration section used for default settings and named profiles.</summary>
+        private const string sectionKey = "LogThis";
 
         #endregion
 
@@ -125,7 +125,7 @@ namespace LogThis.Middleware
             configuration.MessageComponents.Clear();
 
             configuration.AddMessageComponents(components);
-            
+
             return configuration;
         }
 

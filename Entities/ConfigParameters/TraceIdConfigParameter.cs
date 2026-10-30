@@ -19,7 +19,7 @@ namespace LogThis.Entities.ConfigParameters
         /// <param name="runtimeValues">Selected runtime configuration and operation state.</param>
         public TraceIdConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
-            if (Configuration.LogTraceId && 
+            if (Configuration.LogTraceId &&
                 activity is { IdFormat: ActivityIdFormat.W3C } current &&
                 current.TraceId != default)
             {

@@ -19,10 +19,10 @@ namespace LogThis.Entities.ConfigParameters
         /// <param name="runtimeValues">Event data and selected configuration controlling span enrichment.</param>
         public SpanIdConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
-            if (Configuration.LogSpanId && 
+            if (Configuration.LogSpanId &&
                 activity is { IdFormat: ActivityIdFormat.W3C } current &&
                 current.SpanId != default)
-            { 
+            {
                 Obj = current.SpanId.ToHexString();
                 ShouldAddValue = true;
             }
