@@ -5,9 +5,7 @@ through the `[LogThis]` attribute. It uses `Microsoft.Extensions.Logging`, so
 applications keep control of their logging provider, and Metalama to weave the
 logging code at build time.
 
-> [!IMPORTANT]
-> This documentation targets LogThis.NET 1.1.0-beta.1. LogThis.NET 1.0.0 is
-> the latest stable release.
+This documentation targets the stable LogThis.NET 1.1.0 release.
 
 ## Requirements
 
@@ -27,13 +25,13 @@ Two packages are available:
 For a console application, worker, or other non-HTTP host:
 
 ```powershell
-dotnet add package LogThis.NET --version 1.1.0-beta.1
+dotnet add package LogThis.NET --version 1.1.0
 ```
 
 For an ASP.NET Core application:
 
 ```powershell
-dotnet add package LogThis.NET.AspNetCore --version 1.1.0-beta.1
+dotnet add package LogThis.NET.AspNetCore --version 1.1.0
 ```
 
 Applications using `[LogThis]` must be built with the .NET 10 SDK so Metalama
