@@ -1,4 +1,4 @@
-﻿using LogThis.Constants;
+using LogThis.Constants;
 using LogThis.Entities;
 using LogThis.Interfaces;
 using Microsoft.Extensions.Configuration;
@@ -68,7 +68,7 @@ namespace LogThis.Middleware
             }
 
             /// <summary>Registers a named profile callback applied after its JSON values, starting from library defaults.</summary>
-            /// <param name="name">Nonempty name, trimmed and matched case-insensitively.</param>
+            /// <param name="name">Nonempty literal name, matched ordinally and case-sensitively.</param>
             /// <param name="configure">Changes to only this profile.</param>
             /// <exception cref="ArgumentException">The name is empty or already defined in code.</exception>
             /// <remarks>Matching JSON is intentional layering. Profiles do not inherit the default configuration. Validation occurs when the scope factory is first resolved.</remarks>
@@ -76,11 +76,11 @@ namespace LogThis.Middleware
             {
                 ArgumentNullException.ThrowIfNull(configure);
 
-                RegisterProfile(services, new ProfileDefinition(LogThisProfiles.NormalizeName(name), configure, null));
+                RegisterProfile(services, new ProfileDefinition(LogThisProfiles.ValidateName(name), configure, null));
             }
 
             /// <summary>Registers a complete named configuration, replacing any JSON definition for that name.</summary>
-            /// <param name="name">Nonempty name, trimmed and matched case-insensitively.</param>
+            /// <param name="name">Nonempty literal name, matched ordinally and case-sensitively.</param>
             /// <param name="configuration">Complete configuration, not an overlay on default or JSON settings.</param>
             /// <exception cref="ArgumentException">The name is empty or already defined in code.</exception>
             /// <remarks>Custom fields are validated and copied when the scope factory is first resolved.</remarks>
@@ -88,7 +88,7 @@ namespace LogThis.Middleware
             {
                 ArgumentNullException.ThrowIfNull(configuration);
 
-                RegisterProfile(services, new ProfileDefinition(LogThisProfiles.NormalizeName(name), null, configuration));
+                RegisterProfile(services, new ProfileDefinition(LogThisProfiles.ValidateName(name), null, configuration));
             }
         }
 
@@ -139,11 +139,11 @@ namespace LogThis.Middleware
             return BindConfiguration(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
         }
 
-        /// <summary>Adds exactly one code definition per normalized name, retaining default registration.</summary>
+        /// <summary>Adds exactly one code definition per exact name, retaining default registration.</summary>
         private static void RegisterProfile(IServiceCollection services, ProfileDefinition definition)
         {
             if (services.Any(descriptor => descriptor.ImplementationInstance is ProfileDefinition existing &&
-                existing.Name.Equals(definition.Name, StringComparison.OrdinalIgnoreCase)))
+                existing.Name.Equals(definition.Name, StringComparison.Ordinal)))
             {
                 throw new ArgumentException($"LogThis profile '{definition.Name}' is already registered in code. Use one definition per name.");
             }
@@ -159,7 +159,7 @@ namespace LogThis.Middleware
         /// <summary>Builds independent profile configurations, then snapshots and validates all custom fields.</summary>
         private static LogThisProfiles BuildProfiles(IServiceProvider provider, IConfigurationSection? section)
         {
-            Dictionary<string, LogThisConfiguration> named = new(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, LogThisConfiguration> named = new(StringComparer.Ordinal);
 
             IConfigurationSection? container = section?.GetSection("Profiles");
 
@@ -170,7 +170,7 @@ namespace LogThis.Middleware
 
             foreach (IConfigurationSection child in container?.GetChildren() ?? [])
             {
-                string name = LogThisProfiles.NormalizeName(child.Key);
+                string name = LogThisProfiles.ValidateName(child.Key);
 
                 if (child.Value != null)
                 {
@@ -179,7 +179,7 @@ namespace LogThis.Middleware
 
                 if (!named.TryAdd(name, BindConfiguration(child)))
                 {
-                    throw new ArgumentException($"LogThis profile '{name}' has duplicate JSON definitions after name normalization.");
+                    throw new ArgumentException($"LogThis profile '{name}' has duplicate configuration definitions.");
                 }
             }
             foreach (ProfileDefinition definition in provider.GetServices<ProfileDefinition>())
@@ -200,7 +200,7 @@ namespace LogThis.Middleware
                 named[definition.Name] = options;
             }
             return new LogThisProfiles(provider.GetRequiredService<ILogThisConfiguration>(),
-                named.ToDictionary(entry => entry.Key, entry => (ILogThisConfiguration)entry.Value, StringComparer.OrdinalIgnoreCase));
+                named.ToDictionary(entry => entry.Key, entry => (ILogThisConfiguration)entry.Value, StringComparer.Ordinal));
         }
 
         /// <summary>Registers a configuration factory and the scope factory for dependency injection.</summary>

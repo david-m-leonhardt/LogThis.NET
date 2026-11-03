@@ -9,11 +9,12 @@ namespace LogThis.Entities.ConfigParameters
         #region Private Properties
 
         /// <summary>Maps event kinds to their library-owned structured placeholders.</summary>
-        private Dictionary<AccessPointEventKind, string> EventKingLabelMap = new()
+        private readonly Dictionary<AccessPointEventKind, string> EventKingLabelMap = new()
         {
             { AccessPointEventKind.Entry, MessageComponents.OnEntryLabel },
             { AccessPointEventKind.Exception, MessageComponents.OnExceptionLabel },
-            { AccessPointEventKind.Exit, MessageComponents.OnExitLabel }
+            { AccessPointEventKind.Exit, MessageComponents.OnExitLabel },
+            { AccessPointEventKind.OnDemand, MessageComponents.OnDemandLabel }
         };
 
         /// <summary>Structured placeholder chosen for this event.</summary>

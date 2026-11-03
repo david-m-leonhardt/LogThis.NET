@@ -14,8 +14,8 @@ internal sealed class LogThisProfiles
 
     #region Private Properties
 
-    // Profile names are normalized before lookup and compared without case sensitivity.
-    private readonly Dictionary<string, Selection> profiles = new(StringComparer.OrdinalIgnoreCase);
+    // Profile names are literal and compared ordinally.
+    private readonly Dictionary<string, Selection> profiles = new(StringComparer.Ordinal);
 
     #endregion
 
@@ -33,7 +33,7 @@ internal sealed class LogThisProfiles
 
         foreach (KeyValuePair<string, ILogThisConfiguration> entry in named)
         {
-            profiles.Add(NormalizeName(entry.Key), Prepare(entry.Value));
+            profiles.Add(ValidateName(entry.Key), Prepare(entry.Value));
         }
     }
 
@@ -44,23 +44,23 @@ internal sealed class LogThisProfiles
     /// <summary>Selects a whole configuration; null explicitly selects the default.</summary>
     internal Selection Select(string? name)
     {
-        if (name == null)
+        if (string.IsNullOrEmpty(name))
         {
             return Default;
         }
 
-        string normalized = NormalizeName(name);
+        string selectedName = ValidateName(name);
 
-        return profiles.TryGetValue(normalized, out Selection? selection)
+        return profiles.TryGetValue(selectedName, out Selection? selection)
             ? selection
             : throw new InvalidOperationException($"LogThis profile '{name}' is not registered. Register it with AddLogThisProfile or LogThis:Profiles, or correct the attribute's Profile name.");
     }
 
-    /// <summary>Normalizes names consistently for JSON, code registration, and attribute selection.</summary>
-    internal static string NormalizeName(string name)
+    /// <summary>Validates literal names consistently for JSON, code registration, and attribute selection.</summary>
+    internal static string ValidateName(string name)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        return name.Trim();
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        return name;
     }
 
     /// <summary>Rejects invalid capture lengths regardless of the truncation toggle.</summary>

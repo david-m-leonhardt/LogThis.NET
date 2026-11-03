@@ -13,6 +13,8 @@ namespace LogThis.Enum
         /// <summary>The method failed with an exception.</summary>
         Exception,
         /// <summary>The method completed successfully.</summary>
-        Exit
+        Exit,
+        /// <summary>An explicit on-demand checkpoint.</summary>
+        OnDemand
     }
 }

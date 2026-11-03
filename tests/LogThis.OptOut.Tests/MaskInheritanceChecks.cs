@@ -1,6 +1,7 @@
 using LogThis.Attributes;
 using LogThis.Entities;
 using LogThis.Middleware;
+using LogThis.Utility;
 using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;

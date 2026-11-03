@@ -45,22 +45,22 @@ public static class ProfileChecks
         services.AddLogging();
         services.AddSingleton(Configuration());
         services.AddLogThisConfiguration();
-        services.AddLogThisProfile(" detailed ", o => o.LogMethodDuration = true);
+        services.AddLogThisProfile("Detailed", o => o.LogMethodDuration = true);
         services.AddLogThisProfile("CodeOnly", o => o.LogMethodReturnValue = true);
         var supplied = new LogThisConfiguration { LogMethodName = false };
         services.AddLogThisProfile("ExternalCall", supplied);
         using var provider = services.BuildServiceProvider();
         var profiles = provider.GetRequiredService<LogThisProfiles>();
         var defaultOptions = provider.GetRequiredService<ILogThisConfiguration>();
-        var detailed = profiles.Select("DETAILED").Configuration;
+        var detailed = profiles.Select("Detailed").Configuration;
         Check(defaultOptions.LogClassName && !defaultOptions.LogMethodDuration, "Profile modified defaults.");
         Check(detailed.LogMethodArguments && detailed.LogMethodDuration && !detailed.LogClassName && detailed.OnEntryConfig.AccessPointMessage == "Entered", "JSON/code layering or independent defaults failed.");
         Check(detailed.JsonMaskValue == "detail-mask" && detailed.JsonFieldsToMask.SequenceEqual(new[] { "Configured" }), "Profile binding lost mask settings.");
         Check(profiles.Select("CodeOnly").Configuration.JsonMaskValue == "*****", "Code-only profile inherited defaults.");
         Check(ReferenceEquals(profiles.Select("ExternalCall").Configuration, supplied) && supplied.OnEntryConfig.LogAccessPoint, "Supplied instance did not replace JSON definition.");
         Check(!ReferenceEquals(detailed.JsonFieldsToMask, defaultOptions.JsonFieldsToMask), "Profile collections were shared.");
-        Reject(() => services.AddLogThisProfile("DETAILed", new LogThisConfiguration()), "duplicate code");
-        Reject(() => services.AddLogThisProfile(" ", _ => { }), "empty name");
+        Reject(() => services.AddLogThisProfile("Detailed", new LogThisConfiguration()), "duplicate code");
+        services.AddLogThisProfile(" ", _ => { });
         Reject(() => services.AddLogThisProfile("", new LogThisConfiguration()), "empty instance name");
 
         foreach (string invalidKey in new[] { "UnknownSetting", "Profiles:Nested:LogMethodName", "MessageComponents:LogThisMethod" })

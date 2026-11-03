@@ -18,7 +18,8 @@ namespace LogThis.Entities.ConfigParameters
         /// <param name="runtimeValues">Argument payload, invocation metadata, and selected capture configuration.</param>
         public CapturedArgumentsConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
-            if (runtimeValues.Arguments != null && Configuration.LogMethodArguments)
+            if (runtimeValues.Arguments != null &&
+                (Configuration.LogMethodArguments || runtimeValues.AccessPoint.EventKind == Enum.AccessPointEventKind.OnDemand))
             {
                 Obj = LogThisValueMasker.FormatCapture(LogThisValueMasker.MaskArguments(runtimeValues.Context), Configuration);
                 ShouldAddValue = true;

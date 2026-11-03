@@ -5,7 +5,9 @@ through the `[LogThis]` attribute. It uses `Microsoft.Extensions.Logging`, so
 applications keep control of their logging provider, and Metalama to weave the
 logging code at build time.
 
-This documentation targets the stable LogThis.NET 1.1.0 release.
+> [!IMPORTANT]
+> This documentation targets LogThis.NET 1.2.0-beta. LogThis.NET 1.1.0 is the
+> latest stable release.
 
 ## Requirements
 
@@ -25,13 +27,13 @@ Two packages are available:
 For a console application, worker, or other non-HTTP host:
 
 ```powershell
-dotnet add package LogThis.NET --version 1.1.0
+dotnet add package LogThis.NET --version 1.2.0-beta
 ```
 
 For an ASP.NET Core application:
 
 ```powershell
-dotnet add package LogThis.NET.AspNetCore --version 1.1.0
+dotnet add package LogThis.NET.AspNetCore --version 1.2.0-beta
 ```
 
 Applications using `[LogThis]` must be built with the .NET 10 SDK so Metalama
@@ -517,7 +519,7 @@ consumer build:
 Class-level `[LogThis]` with method-level `[DontLogThis]` is a supported
 opt-out and does not itself produce a warning.
 
-Profile names are trimmed and compared case-insensitively when checking for a
+Profile names are compared exactly (ordinal, case-sensitive) when checking for a
 redundant method selection. A method may still override a named class profile by
 explicitly selecting the default or a different profile. Applications can
 suppress or promote these diagnostics through their normal compiler settings.
@@ -704,8 +706,9 @@ builder.Services.AddLogThisProfile("ExternalCall", new LogThisConfiguration
 
 A callback extends a matching JSON profile, or starts from library defaults
 when no matching JSON exists. Passing a `LogThisConfiguration` instance supplies
-the complete profile. Names are trimmed and matched case-insensitively; empty
-names and duplicate code definitions are rejected.
+the complete profile. Names use exact ordinal, case-sensitive matching without
+trimming. Null or empty selections use the default profile; empty registrations
+and duplicate code definitions are rejected.
 
 Select a profile on the class or method:
 
@@ -746,28 +749,29 @@ active LogThis scope; LogThis does not silently fall back to the default.
 | `DebugLogThis` | `false` | Enables best-effort console diagnostics for internal LogThis failures. |
 | `JsonFieldsToMask` | Empty | Lists JSON property names to redact. |
 | `JsonMaskValue` | `"*****"` | Sets the replacement for redacted values. |
-| `TruncateCapturedValues` | `true` | Wraps oversized completed captures with a preview. Disable for unlimited output. |
-| `MaxCapturedValueLength` | `4096` | Positive preview length in UTF-16 units, excluding wrapper/escaping overhead. |
 | `LogClassName` | `false` | Adds the declaring class as `{LogThisClass}`. |
 | `LogComponentLabels` | `true` | Adds descriptive labels such as `Class:` and `Method:` to rendered components. |
 | `LogCorrelationId` | `true` | Lazily obtains the chain's ID for eligible events and adds `{LogThisCorrelationId}`. |
-| `LogMethodName` | `true` | Adds the method as `{LogThisMethod}`. |
 | `LogMethodArguments` | `false` | Adds `{LogThisArguments}` to entry and exception events. |
-| `LogMethodReturnValue` | `false` | Adds `{LogThisReturnValue}` to exit events and an empty value to exception events. |
 | `LogMethodDuration` | `false` | Adds numeric `{LogThisDurationMs}` to existing exit and exception events. |
+| `LogMethodName` | `true` | Adds the method as `{LogThisMethod}`. |
+| `LogMethodReturnValue` | `false` | Adds `{LogThisReturnValue}` to exit events and an empty value to exception events. |
 | `LogSpanId` | `false` | Includes an existing W3C activity span ID as `{LogThisSpanId}`. |
 | `LogTraceId` | `false` | Includes an existing W3C activity trace ID as `{LogThisTraceId}`. |
-| `MessageDelimeter` | Space, pipe, space | Separates placeholders in the message template. |
+| `MaxCapturedValueLength` | `4096` | Positive preview length in UTF-16 units, excluding wrapper/escaping overhead. |
 | `MessageComponents` | Empty | Adds custom structured properties to every event. |
+| `MessageDelimeter` | Space, pipe, space | Separates placeholders in the message template. |
+| `TruncateCapturedValues` | `true` | Wraps oversized completed captures with a preview. Disable for unlimited output. |
 
-`OnEntryConfig`, `OnExceptionConfig`, and `OnExitConfig` each provide:
+`OnDemandConfig`, `OnEntryConfig`, `OnExceptionConfig`, and `OnExitConfig` each
+provide:
 
 - `LogAccessPoint` to enable or disable that event
 - `LogLevel` to select its severity
 - `AccessPointMessage` to change its message
 
 Custom `IAccessPointConfiguration` implementations must return the appropriate
-entry, exit, or exception `EventKind`.
+on-demand, entry, exit, or exception `EventKind`.
 
 ### Captured-content truncation
 
@@ -837,7 +841,7 @@ and the logging provider remains responsible for whole-event formatting.
 Custom component names must not conflict with these library-owned structured
 properties, regardless of case or whether the related feature is enabled:
 
-- `LogThisOnEntry`, `LogThisOnExit`, `LogThisOnException`
+- `LogThisOnEntry`, `LogThisOnExit`, `LogThisOnException`, `LogThisOnDemand`, `LogThisMessage`
 - `LogThisClass`, `LogThisMethod`, `LogThisArguments`, `LogThisReturnValue`
 - `LogThisDurationMs`, `LogThisCorrelationId`
 - `LogThisTraceId`, `LogThisSpanId`
@@ -900,6 +904,35 @@ measured after entry logging and before completion-event logging. The rendered
 component is similar to `Duration ms: 12.34`, while the structured value remains
 a number. For deferred sequences, duration covers the method call rather than
 later consumer processing.
+
+## On-demand events
+
+Use `LogThis.Utility.LogOnDemand` inside an active middleware or `UseLogThis`
+scope to emit an explicit checkpoint:
+
+```csharp
+using LogThis.Utility;
+
+LogOnDemand.LogThisNow();
+LogOnDemand.LogThisNow("Checkpoint {literal text}");
+LogOnDemand.LogThisNow(values: [new { OrderId = 42 }, null]);
+LogOnDemand.LogThisNow("Sent", profile: "ExternalCall", values: [response]);
+```
+
+Each call emits one event. `OnDemandConfig` is enabled by default at
+`Information` with the access-point message `OnDemand`. The optional message is
+literal text; null, empty, or whitespace-only messages omit its component without
+suppressing the event.
+
+Supplied `values` are captured even when method-argument capture is disabled and
+use the active profile's masking, exclusion, enumeration, and truncation rules.
+Omitting `values` captures nothing, while `[null]` captures one null value.
+
+On-demand events can include the caller member, correlation and activity IDs,
+and custom components, but not class or return-value components. A null or empty
+profile selects the registered default; an explicit profile affects only that
+event. Calls outside an active scope do nothing, disabled or filtered events skip
+capture, and an unknown profile throws `InvalidOperationException`.
 
 ## Behavior and limitations
 

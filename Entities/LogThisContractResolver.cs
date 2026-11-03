@@ -88,6 +88,7 @@ internal sealed class LogThisContractResolver(HashSet<string> names, string mask
         {
             property.Ignored = false;
         }
+
         if (member is PropertyInfo && member.IsDefined(typeof(DontLogThisAttribute), inherit: false))
         {
             property.Ignored = true;

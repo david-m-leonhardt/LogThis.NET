@@ -1,4 +1,4 @@
-﻿using LogThis.Interfaces;
+using LogThis.Interfaces;
 
 namespace LogThis.Entities
 {
@@ -24,6 +24,9 @@ namespace LogThis.Entities
 
         /// <summary>Whether enabled successful-result capture should use a replacement instead of the result.</summary>
         internal bool MaskReturn { get; set; } = false;
+
+        /// <summary>Optional literal on-demand message; null, empty, or whitespace-only text omits the message component.</summary>
+        internal string? Message { get; set; }
 
         /// <summary>Literal return mask, or null to use the selected configuration's JsonMaskValue.</summary>
         internal string? ReturnReplacement { get; set; } = null;

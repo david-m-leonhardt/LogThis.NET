@@ -1,8 +1,11 @@
-﻿namespace LogThis.Interfaces
+namespace LogThis.Interfaces
 {
     /// <summary>Options shared by the aspect, message builder, and runtime logger.</summary>
     public interface ILogThisConfiguration
     {
+        /// <summary>On-demand event settings; enabled at Information with text OnDemand by default.</summary>
+        IAccessPointConfiguration OnDemandConfig { get; set; }
+
         #region Properties
 
         /// <summary>Whether internal logging failures are written to the console at Debug level.</summary>

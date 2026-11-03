@@ -1,11 +1,22 @@
-﻿using LogThis.Interfaces;
+﻿using LogThis.Entities;
+using LogThis.Interfaces;
 
-namespace LogThis.Entities
+namespace LogThis.Utility
 {
     /// <summary>Prepares event-specific invocation data without serializing application values.</summary>
     internal static class RuntimeValuesFactory
     {
         #region Internal Methods
+
+        internal static LogThisRuntimeValues BuildOnDemandValues(LogThisRuntime runtime, string memberName, string? message, object?[]? values)
+        {
+            LogThisMethodContext context = new(memberName, string.Empty, values ?? []);
+            LogThisRuntimeValues runtimeValues = BuildRuntimeValues(runtime.Configuration.OnDemandConfig, context, runtime);
+            runtimeValues.Arguments = values;
+            runtimeValues.Message = message;
+
+            return runtimeValues;
+        }
 
         /// <summary>Prepares entry-event settings and the invocation's included arguments.</summary>
         /// <param name="context">Method identity and captured argument metadata.</param>

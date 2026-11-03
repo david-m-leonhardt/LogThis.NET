@@ -1,7 +1,7 @@
 ﻿using LogThis.Constants;
 using LogThis.Enum;
 
-namespace LogThis.Entities
+namespace LogThis.Entities.AccessPoints
 {
     /// <summary>Defaults for the successful method-exit event.</summary>
     internal sealed class OnExitConfiguration() : AccessPointConfigurationBase

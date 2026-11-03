@@ -1,4 +1,5 @@
-﻿using LogThis.Extensions;
+using LogThis.Entities.AccessPoints;
+using LogThis.Extensions;
 using LogThis.Interfaces;
 
 namespace LogThis.Entities
@@ -86,6 +87,9 @@ namespace LogThis.Entities
         /// <summary>Text separating placeholders in the message template.</summary>
         /// <value><c> | </c> by default.</value>
         public string MessageDelimeter { get; set; } = Constants.MessageComponents.DefaultDelimeter;
+
+        /// <summary>Settings for on-demand events, enabled at Information with text OnDemand by default.</summary>
+        public IAccessPointConfiguration OnDemandConfig { get; set; } = new OnDemandConfiguration();
 
         /// <summary>Settings for method-entry events.</summary>
         /// <value>Entry events are enabled at Information level by default.</value>

@@ -18,7 +18,7 @@ namespace LogThis.Entities.ConfigParameters
         /// <param name="runtimeValues">Selected runtime configuration and operation state.</param>
         public ClassNameConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
-            if (Configuration.LogClassName)
+            if (Configuration.LogClassName && runtimeValues.AccessPoint.EventKind != Enum.AccessPointEventKind.OnDemand)
             {
                 Obj = runtimeValues.Context.ClassName;
                 ShouldAddValue = true;

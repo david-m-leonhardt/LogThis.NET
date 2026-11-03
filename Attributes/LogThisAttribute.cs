@@ -1,5 +1,6 @@
-using LogThis.Entities;
 using LogThis.Constants;
+using LogThis.Entities;
+using LogThis.Utility;
 using Metalama.Framework.Advising;
 using Metalama.Framework.Aspects;
 using Metalama.Framework.Code;
@@ -37,7 +38,7 @@ public sealed class LogThisAttribute : OverrideMethodAspect, IAspect<INamedType>
     #region Public Properties
 
     /// <summary>Selects a complete named configuration; null selects the default configuration.</summary>
-    /// <remarks>Names are trimmed and matched case-insensitively. Method attributes override class selection, including explicit default selection. Unknown names fail when invoked in an active scope.</remarks>
+    /// <remarks>Null or empty selects the default. Other names match exactly, ordinally and case-sensitively. Method attributes override class selection, including explicit default selection. Unknown names fail when invoked in an active scope.</remarks>
     public string? Profile { get; set; }
 
     #endregion

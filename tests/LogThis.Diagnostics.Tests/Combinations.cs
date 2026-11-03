@@ -19,6 +19,7 @@ public class DefaultProfiles
 
     [LogThis] public void ImplicitDefault() { } // LOGTHIS006
     [LogThis(Profile = null)] public static void ExplicitDefault() { } // LOGTHIS006
+    [LogThis(Profile = "")] public void EmptyDefault() { } // LOGTHIS006
     [LogThis(Profile = "Other")] public void Different() { }
     [DontLogThis] public void ValidExclusion() { }
     [LogThis, DontLogThis] public void Excluded() { } // LOGTHIS003 (no LOGTHIS006)
@@ -35,14 +36,14 @@ public class DefaultProfiles
     #endregion
 }
 
-/// <summary>Profile comparison uses trimmed case-insensitive names, not configuration contents.</summary>
+/// <summary>Profile comparison uses exact ordinal names, not configuration contents.</summary>
 [LogThis(Profile = " Audit ")]
 public sealed class NamedProfiles
 {
     #region Public Methods
 
-    [LogThis(Profile = "audit")] public void Same() { } // LOGTHIS006
-    [LogThis(Profile = " AUDIT ")] public void SameTrimmed() { } // LOGTHIS006
+    [LogThis(Profile = " Audit ")] public void Same() { } // LOGTHIS006
+    [LogThis(Profile = " AUDIT ")] public void SameTrimmed() { }
     [LogThis] public void Default() { }
     [LogThis(Profile = null)] public void ExplicitDefault() { }
     [LogThis(Profile = "Other")] public void Different() { }

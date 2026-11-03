@@ -1,45 +1,15 @@
+using LogThis.Entities;
 using LogThis.Interfaces;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
-namespace LogThis.Entities;
+namespace LogThis.Utility;
 
 /// <summary>
 /// Runtime entry points for generated aspect code. An absent ambient scope suppresses logging.
 /// </summary>
 public static class LogThisRuntimeLogger
 {
-    #region Private Methods
-
-    /// <summary>Builds and emits one access-point event when its log level is enabled.</summary>
-    /// <param name="runtimeValues">Event settings, invocation payload, and selected runtime state.</param>
-    private static void Write(LogThisRuntimeValues runtimeValues)
-    {
-        try
-        {
-            // Catch construction and provider failures without changing the intercepted method's outcome.
-            // Check the level before serializing arguments or the return value.
-            if (runtimeValues.ShouldNotLog)
-            {
-                return;
-            }
-
-            LogParameters parameters = new(runtimeValues);
-
-            runtimeValues.Runtime.Logger.Log(
-                runtimeValues.AccessPoint.LogLevel,
-                runtimeValues.Exception,
-                parameters.Message,
-                parameters.Args);
-        }
-        catch (Exception loggingException)
-        {
-            ReportFailure(runtimeValues.Runtime.Configuration, loggingException, "LogThis failed while emitting a method log.");
-        }
-    }
-
-    #endregion
-
     #region Internal Methods
 
     /// <summary>Reports logging failures through the existing independent console diagnostics.</summary>
@@ -62,6 +32,33 @@ public static class LogThisRuntimeLogger
         catch
         {
             // Diagnostics must never replace application results or prevent scope creation.
+        }
+    }
+
+    /// <summary>Builds and emits one access-point event when its log level is enabled.</summary>
+    /// <param name="runtimeValues">Event settings, invocation payload, and selected runtime state.</param>
+    internal static void Write(LogThisRuntimeValues runtimeValues)
+    {
+        try
+        {
+            // Catch construction and provider failures without changing the intercepted method's outcome.
+            // Check the level before serializing arguments or the return value.
+            if (runtimeValues.ShouldNotLog)
+            {
+                return;
+            }
+
+            LogParameters parameters = new(runtimeValues);
+
+            runtimeValues.Runtime.Logger.Log(
+                runtimeValues.AccessPoint.LogLevel,
+                runtimeValues.Exception,
+                parameters.Message,
+                parameters.Args);
+        }
+        catch (Exception loggingException)
+        {
+            ReportFailure(runtimeValues.Runtime.Configuration, loggingException, "LogThis failed while emitting a method log.");
         }
     }
 
@@ -137,7 +134,7 @@ public static class LogThisRuntimeLogger
     /// <summary>Selects a method's complete configuration for logging and serialization, restoring its caller on disposal.</summary>
     /// <param name="profile">Named profile, or null to select the operation's default configuration.</param>
     /// <returns>A selection scope, or null outside an operation scope.</returns>
-    /// <exception cref="ArgumentException">The profile name is empty or whitespace.</exception>
+
     /// <exception cref="InvalidOperationException">The named profile is not registered in the active operation.</exception>
     /// <remarks>Configuration errors are raised before application execution. This does not generate or replace correlation IDs.</remarks>
     public static IDisposable? SelectProfile(string? profile)

@@ -1,8 +1,9 @@
-﻿using LogThis.Entities.ConfigParameters;
+using LogThis.Entities;
+using LogThis.Entities.ConfigParameters;
 using LogThis.Enum;
 using LogThis.Interfaces;
 
-namespace LogThis.Entities
+namespace LogThis.Utility
 {
     /// <summary>Builds configured event components in their rendered order.</summary>
     internal static class ConfigParamFactory
@@ -18,7 +19,7 @@ namespace LogThis.Entities
             CapturedArgumentsConfigParameter capturedArguments = new(runtimeValues);
 
             CapturedReturnConfigParameter? capturedReturn =
-                runtimeValues.AccessPoint.EventKind == AccessPointEventKind.Entry
+                runtimeValues.AccessPoint.EventKind is AccessPointEventKind.Entry or AccessPointEventKind.OnDemand
                     ? null
                     : new CapturedReturnConfigParameter(runtimeValues);
 

@@ -1,4 +1,4 @@
-﻿namespace LogThis.Constants
+namespace LogThis.Constants
 {
     /// <summary>Internal default message text for method-entry, exception, and exit events.</summary>
     internal static class AccessPoint
@@ -11,6 +11,8 @@
         internal const string ExceptionMessage = "Exception";
         /// <summary>Default successful-exit event text.</summary>
         internal const string ExitMessage = "Exited";
+        /// <summary>Default on-demand event text.</summary>
+        internal const string OnDemandMessage = "OnDemand";
 
         #endregion
     }
