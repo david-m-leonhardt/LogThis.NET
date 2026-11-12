@@ -1,5 +1,14 @@
 # Opt-out integration checks
 
+`AspNetCoreMiddlewareChecks` runs with the regular suite and references the ASP.NET
+Core adapter. It starts Kestrel on an automatically assigned loopback port and sends
+real HTTP requests through `app.UseLogThis()`. Checks cover attributed method logging
+without endpoint-created scopes, separate sequential and overlapping request
+correlation IDs, scope cleanup after success and failure, original exception
+propagation, and default/custom logger categories. The suite requires permission to
+open a local listening socket; no external HTTP service or additional test-server
+package is required.
+
 Iterator checks run with the regular suite. `IteratorBufferingChecks` retains the
 original disabled-capture reproduction. `IteratorTemplateChecks` now uses production
 `LogThis` attributes instead of a prototype aspect, covering all six yield signatures

@@ -8,6 +8,8 @@
     <DefineConstants Condition="'$(ReturnMaskDiagnosticMode)' != ''">$(DefineConstants);RETURN_MASK_$(ReturnMaskDiagnosticMode)</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../../LogThis.NET.AspNetCore/LogThis.NET.AspNetCore.csproj" />
     <ProjectReference Include="../../LogThis.NET.csproj" />
   </ItemGroup>
 </Project>

@@ -911,16 +911,24 @@ later consumer processing.
 ## On-demand events
 
 Use `LogThis.Utility.LogOnDemand` inside an active middleware or `UseLogThis`
-scope to emit an explicit checkpoint:
+scope to emit an explicit checkpoint. A global static import, such as one in
+`GlobalUsings.cs`, makes both methods available without the class name:
 
 ```csharp
-using LogThis.Utility;
-
-LogOnDemand.LogThisNow();
-LogOnDemand.LogThisNow("Checkpoint {literal text}");
-LogOnDemand.LogThisNow(values: [new { OrderId = 42 }, null]);
-LogOnDemand.LogThisNow("Sent", profile: "ExternalCall", values: [response]);
+global using static LogThis.Utility.LogOnDemand;
 ```
+
+Then call the methods directly:
+
+```csharp
+LogThisNow();
+LogThisNow("Checkpoint {literal text}");
+LogThisNow(values: [new { OrderId = 42 }, null]);
+LogThisNow("Sent", profile: "ExternalCall", values: [response]);
+```
+
+The static import is optional; `LogOnDemand.LogThisNow(...)` and
+`LogOnDemand.LogThisExceptionNow(...)` are equivalent.
 
 Each `LogThisNow` call emits one event. `OnDemandConfig` is enabled by default at
 `Information` with the access-point message `OnDemand`. The optional message is
@@ -944,12 +952,12 @@ exception argument may be null, in which case the event has no attached
 exception:
 
 ```csharp
-LogOnDemand.LogThisExceptionNow(
+LogThisExceptionNow(
     exception,
     "Retry scheduled",
     values: [new { OrderId = 42 }]);
 
-LogOnDemand.LogThisExceptionNow(null, profile: "ExternalCall");
+LogThisExceptionNow(null, profile: "ExternalCall");
 ```
 
 The selected profile uses `OnExceptionConfig` by default. Set
@@ -968,6 +976,40 @@ The common on-demand message, value capture, profile, scope, and failure behavio
 still applies. A supplied exception is passed unchanged to the logging provider.
 Logging it explicitly and then rethrowing it from an instrumented method can
 produce both an on-demand exception event and a method exception event.
+
+### Combining attributes and on-demand events
+
+Use `[LogThis]` for method boundaries and on-demand calls for meaningful decisions
+or handled failures inside the method:
+
+```csharp
+using LogThis.Attributes;
+
+[LogThis]
+public OrderResult Submit(Order order)
+{
+    if (order.RequiresApproval)
+    {
+        LogThisNow("Order requires approval", values: [new { order.Id, order.Total }]);
+        return OrderResult.PendingApproval;
+    }
+
+    try
+    {
+        return vendor.Submit(order);
+    }
+    catch (VendorException exception)
+    {
+        LogThisExceptionNow(exception, "Vendor submission failed", values: [new { order.Id }]);
+        return OrderResult.Failed;
+    }
+}
+```
+
+Events in the same active scope share the same `LogThisCorrelationId` when
+correlation is enabled. A handled failure produces the explicit exception event
+and a normal method exit; only an exception that escapes the method produces the
+generated method exception event.
 
 ## Behavior and limitations
 

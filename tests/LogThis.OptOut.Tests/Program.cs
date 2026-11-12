@@ -71,6 +71,7 @@ DeferredCaptureChecks.Run();
 TruncationChecks.Run();
 OnDemandChecks.Run();
 OnDemandExceptionChecks.Run();
+await AspNetCoreMiddlewareChecks.RunAsync();
 IteratorBufferingChecks.Run();
 await IteratorTemplateChecks.RunAsync();
 await CancellationAttributeChecks.RunAsync();
