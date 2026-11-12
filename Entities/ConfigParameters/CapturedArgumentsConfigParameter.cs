@@ -19,7 +19,7 @@ namespace LogThis.Entities.ConfigParameters
         public CapturedArgumentsConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
             if (runtimeValues.Arguments != null &&
-                (Configuration.LogMethodArguments || runtimeValues.AccessPoint.EventKind == Enum.AccessPointEventKind.OnDemand))
+                (Configuration.LogMethodArguments || runtimeValues.IsOnDemand))
             {
                 Obj = LogThisValueMasker.FormatCapture(LogThisValueMasker.MaskArguments(runtimeValues.Context), Configuration);
                 ShouldAddValue = true;

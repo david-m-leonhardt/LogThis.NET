@@ -14,7 +14,8 @@ namespace LogThis.Entities.ConfigParameters
             { AccessPointEventKind.Entry, MessageComponents.OnEntryLabel },
             { AccessPointEventKind.Exception, MessageComponents.OnExceptionLabel },
             { AccessPointEventKind.Exit, MessageComponents.OnExitLabel },
-            { AccessPointEventKind.OnDemand, MessageComponents.OnDemandLabel }
+            { AccessPointEventKind.OnDemand, MessageComponents.OnDemandLabel },
+            { AccessPointEventKind.OnDemandException, MessageComponents.OnDemandExceptionLabel }
         };
 
         /// <summary>Structured placeholder chosen for this event.</summary>
@@ -35,7 +36,7 @@ namespace LogThis.Entities.ConfigParameters
         /// <param name="runtimeValues">Event settings and selected runtime state used to choose the message placeholder.</param>
         public AccessPointConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
-            _message = EventKingLabelMap[runtimeValues.AccessPoint.EventKind];
+            _message = EventKingLabelMap[runtimeValues.EventKind];
             Obj = runtimeValues.AccessPoint.AccessPointMessage;
             ShouldAddValue = true;
         }

@@ -770,8 +770,11 @@ provide:
 - `LogLevel` to select its severity
 - `AccessPointMessage` to change its message
 
-Custom `IAccessPointConfiguration` implementations must return the appropriate
-on-demand, entry, exit, or exception `EventKind`.
+The optional `OnDemandExceptionConfig` provides the same settings for explicit
+exception events; when absent, those events use `OnExceptionConfig`.
+
+Custom `IAccessPointConfiguration` implementations assigned to the four primary
+configuration properties must return the corresponding `EventKind`.
 
 ### Captured-content truncation
 
@@ -841,7 +844,7 @@ and the logging provider remains responsible for whole-event formatting.
 Custom component names must not conflict with these library-owned structured
 properties, regardless of case or whether the related feature is enabled:
 
-- `LogThisOnEntry`, `LogThisOnExit`, `LogThisOnException`, `LogThisOnDemand`, `LogThisMessage`
+- `LogThisOnEntry`, `LogThisOnExit`, `LogThisOnException`, `LogThisOnDemand`, `LogThisOnDemandException`, `LogThisMessage`
 - `LogThisClass`, `LogThisMethod`, `LogThisArguments`, `LogThisReturnValue`
 - `LogThisDurationMs`, `LogThisCorrelationId`
 - `LogThisTraceId`, `LogThisSpanId`
@@ -919,7 +922,7 @@ LogOnDemand.LogThisNow(values: [new { OrderId = 42 }, null]);
 LogOnDemand.LogThisNow("Sent", profile: "ExternalCall", values: [response]);
 ```
 
-Each call emits one event. `OnDemandConfig` is enabled by default at
+Each `LogThisNow` call emits one event. `OnDemandConfig` is enabled by default at
 `Information` with the access-point message `OnDemand`. The optional message is
 literal text; null, empty, or whitespace-only messages omit its component without
 suppressing the event.
@@ -933,6 +936,38 @@ and custom components, but not class or return-value components. A null or empty
 profile selects the registered default; an explicit profile affects only that
 event. Calls outside an active scope do nothing, disabled or filtered events skip
 capture, and an unknown profile throws `InvalidOperationException`.
+
+### Exception events
+
+Use `LogThisExceptionNow` to emit an explicit exception event. The required
+exception argument may be null, in which case the event has no attached
+exception:
+
+```csharp
+LogOnDemand.LogThisExceptionNow(
+    exception,
+    "Retry scheduled",
+    values: [new { OrderId = 42 }]);
+
+LogOnDemand.LogThisExceptionNow(null, profile: "ExternalCall");
+```
+
+The selected profile uses `OnExceptionConfig` by default. Set
+`OnDemandExceptionConfig` to replace its enabled state, level, and access-point
+message for explicit exception events. In code, the helper creates an independent
+override with the standard exception defaults:
+
+```csharp
+builder.Services.AddLogThisProfile("ExternalCall", options =>
+{
+    options.InitializeOnDemandExceptionConfiguration().LogLevel = LogLevel.Warning;
+});
+```
+
+The common on-demand message, value capture, profile, scope, and failure behavior
+still applies. A supplied exception is passed unchanged to the logging provider.
+Logging it explicitly and then rethrowing it from an instrumented method can
+produce both an on-demand exception event and a method exception event.
 
 ## Behavior and limitations
 

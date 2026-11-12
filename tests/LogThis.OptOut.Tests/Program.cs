@@ -70,6 +70,7 @@ await ReturnMaskChecks.RunAsync();
 DeferredCaptureChecks.Run();
 TruncationChecks.Run();
 OnDemandChecks.Run();
+OnDemandExceptionChecks.Run();
 IteratorBufferingChecks.Run();
 await IteratorTemplateChecks.RunAsync();
 await CancellationAttributeChecks.RunAsync();

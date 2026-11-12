@@ -19,7 +19,7 @@ namespace LogThis.Utility
             CapturedArgumentsConfigParameter capturedArguments = new(runtimeValues);
 
             CapturedReturnConfigParameter? capturedReturn =
-                runtimeValues.AccessPoint.EventKind is AccessPointEventKind.Entry or AccessPointEventKind.OnDemand
+                runtimeValues.EventKind == AccessPointEventKind.Entry || runtimeValues.IsOnDemand
                     ? null
                     : new CapturedReturnConfigParameter(runtimeValues);
 

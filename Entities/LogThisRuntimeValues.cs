@@ -1,3 +1,4 @@
+using LogThis.Enum;
 using LogThis.Interfaces;
 
 namespace LogThis.Entities
@@ -9,6 +10,15 @@ namespace LogThis.Entities
 
         /// <summary>Event kind, message, enabled state, and severity for this event.</summary>
         internal required IAccessPointConfiguration AccessPoint { get; set; }
+
+        /// <summary>Overrides event identity when settings come from another access point.</summary>
+        internal AccessPointEventKind? EventKindOverride { get; set; }
+
+        /// <summary>Effective event identity used to select structured components.</summary>
+        internal AccessPointEventKind EventKind => EventKindOverride ?? AccessPoint.EventKind;
+
+        /// <summary>Whether this event was requested explicitly.</summary>
+        internal bool IsOnDemand => EventKind is AccessPointEventKind.OnDemand or AccessPointEventKind.OnDemandException;
 
         /// <summary>Included argument payload for entry or exception events; null for exit events.</summary>
         internal object?[]? Arguments { get; set; }

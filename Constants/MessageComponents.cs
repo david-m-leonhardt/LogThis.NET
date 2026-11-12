@@ -29,6 +29,8 @@ namespace LogThis.Constants
         internal const string LogThisMessage = "{LogThisMessage}";
         /// <summary>Placeholder for the on-demand event text.</summary>
         internal const string OnDemandLabel = "{LogThisOnDemand}";
+        /// <summary>Placeholder for explicitly logged exception event text.</summary>
+        internal const string OnDemandExceptionLabel = "{LogThisOnDemandException}";
         /// <summary>Placeholder for the entry-event text.</summary>
         internal const string OnEntryLabel = "{LogThisOnEntry}";
         /// <summary>Placeholder for the exception-event text.</summary>

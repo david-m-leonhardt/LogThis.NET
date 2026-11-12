@@ -1,5 +1,6 @@
 using LogThis.Constants;
 using LogThis.Entities;
+using LogThis.Entities.AccessPoints;
 using LogThis.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -117,6 +118,13 @@ namespace LogThis.Middleware
         private static LogThisConfiguration BindConfiguration(IConfiguration section)
         {
             LogThisConfiguration configuration = new();
+
+            // The binder needs a concrete instance for an interface-valued override.
+            if (section.GetChildren().Any(child =>
+                child.Key.Equals(nameof(LogThisConfiguration.OnDemandExceptionConfig), StringComparison.OrdinalIgnoreCase)))
+            {
+                configuration.OnDemandExceptionConfig = new OnExceptionConfiguration();
+            }
 
             section.Bind(configuration, options => options.ErrorOnUnknownConfiguration = true);
 
