@@ -2,6 +2,7 @@ using LogThis.Entities;
 using LogThis.Extensions;
 using LogThis.Interfaces;
 using LogThis.Middleware;
+using LogThis.Utility;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

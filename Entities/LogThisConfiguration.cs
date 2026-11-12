@@ -1,5 +1,7 @@
-﻿using LogThis.Extensions;
+using LogThis.Entities.AccessPoints;
+using LogThis.Extensions;
 using LogThis.Interfaces;
+using System.Diagnostics.CodeAnalysis;
 
 namespace LogThis.Entities
 {
@@ -77,7 +79,8 @@ namespace LogThis.Entities
         /// Names are validated at configuration resolution and copied when the scope factory is created.
         /// Later dictionary edits no longer affect that factory's events; referenced values are not cloned.
         /// Reserved names (case-insensitive, with or without braces) are LogThisOnEntry, LogThisOnExit,
-        /// LogThisOnException, LogThisClass, LogThisMethod, LogThisArguments, LogThisReturnValue,
+        /// LogThisOnException, LogThisOnDemand, LogThisOnDemandException, LogThisMessage,
+        /// LogThisClass, LogThisMethod, LogThisArguments, LogThisReturnValue,
         /// LogThisDurationMs, LogThisCorrelationId, LogThisTraceId, and LogThisSpanId, even when the corresponding feature is disabled.
         /// </remarks>
         /// <value>An initially empty dictionary whose keys are message-template placeholders.</value>
@@ -86,6 +89,12 @@ namespace LogThis.Entities
         /// <summary>Text separating placeholders in the message template.</summary>
         /// <value><c> | </c> by default.</value>
         public string MessageDelimeter { get; set; } = Constants.MessageComponents.DefaultDelimeter;
+
+        /// <summary>Settings for on-demand events, enabled at Information with text OnDemand by default.</summary>
+        public IAccessPointConfiguration OnDemandConfig { get; set; } = new OnDemandConfiguration();
+
+        /// <inheritdoc />
+        public IAccessPointConfiguration? OnDemandExceptionConfig { get; set; }
 
         /// <summary>Settings for method-entry events.</summary>
         /// <value>Entry events are enabled at Information level by default.</value>
@@ -113,6 +122,20 @@ namespace LogThis.Entities
             {
                 MessageComponents.Add(component.Key.PrepComponentName(), component.Value);
             }
+        }
+
+        /// <summary>Gets or creates the override used for on-demand exception events.</summary>
+        /// <returns>The configuration stored in <see cref="OnDemandExceptionConfig"/>.</returns>
+        /// <remarks>
+        /// If the override is absent, this method creates an independent configuration with
+        /// logging enabled at Error level and event text <c>Exception</c>. On-demand exception
+        /// events then use the override in place of <see cref="OnExceptionConfig"/>.
+        /// If an override already exists, this method returns it with its settings intact.
+        /// </remarks>
+        [MemberNotNull(nameof(OnDemandExceptionConfig))]
+        public IAccessPointConfiguration InitializeOnDemandExceptionConfiguration()
+        {
+            return OnDemandExceptionConfig ??= new OnExceptionConfiguration();
         }
 
         #endregion

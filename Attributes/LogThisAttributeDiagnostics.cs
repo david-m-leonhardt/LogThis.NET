@@ -59,14 +59,7 @@ internal sealed class LogThisAttributeDiagnostics : TransitiveProjectFabric
         string? classProfile = GetProfile(classAttribute);
         string? methodProfile = GetProfile(methodAttribute);
 
-        // Whitespace-only names are invalid at runtime, not aliases for the default selection.
-        if (classProfile != null && string.IsNullOrWhiteSpace(classProfile) ||
-            methodProfile != null && string.IsNullOrWhiteSpace(methodProfile))
-        {
-            return false;
-        }
-
-        return string.Equals(classProfile?.Trim(), methodProfile?.Trim(), StringComparison.OrdinalIgnoreCase);
+        return string.Equals(classProfile ?? "", methodProfile ?? "", StringComparison.Ordinal);
     }
 
     /// <summary>Reads profile-selection metadata; an omitted or null value selects the default profile.</summary>

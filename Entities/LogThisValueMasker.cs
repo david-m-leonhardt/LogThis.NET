@@ -30,11 +30,6 @@ internal static class LogThisValueMasker
         return new JObject { ["truncated"] = true, ["preview"] = text[..length] }.ToString(Formatting.None);
     }
 
-    /// <summary>Serializes one value and masks matching properties at any depth.</summary>
-    /// <param name="value">Value to serialize and mask.</param>
-    /// <returns>Serialized JSON with matching property values replaced.</returns>
-    internal static string MaskObject(object? value) => MaskJson(value).ToString(Formatting.None);
-
     /// <summary>Formats named arguments in declaration order, retaining positional output for legacy contexts.</summary>
     /// <param name="context">Method context whose arguments should be captured.</param>
     /// <returns>A JSON object of names and masked values, or a legacy positional list.</returns>
@@ -57,6 +52,11 @@ internal static class LogThisValueMasker
 
         return arguments.ToString(Formatting.None);
     }
+
+    /// <summary>Serializes one value and masks matching properties at any depth.</summary>
+    /// <param name="value">Value to serialize and mask.</param>
+    /// <returns>Serialized JSON with matching property values replaced.</returns>
+    internal static string MaskObject(object? value) => MaskJson(value).ToString(Formatting.None);
 
     /// <summary>Serializes and masks each argument, then combines them as a display list.</summary>
     /// <param name="values">Values to serialize and mask individually.</param>

@@ -1,11 +1,11 @@
-using System.Collections;
-using System.Runtime.CompilerServices;
 using LogThis.Attributes;
 using LogThis.Entities;
-using LogThis.Interfaces;
 using LogThis.Middleware;
+using LogThis.Utility;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Collections;
+using System.Runtime.CompilerServices;
 
 /// <summary>Production iterator templates preserve creation, consumption, and disposal boundaries.</summary>
 public static class IteratorTemplateChecks

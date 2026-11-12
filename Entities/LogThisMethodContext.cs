@@ -17,14 +17,14 @@ public sealed class LogThisMethodContext(string methodName, string className, ob
     /// <value>The generated argument array, with excluded parameters omitted.</value>
     public object?[] Arguments { get; } = arguments;
 
+    /// <summary>Gets the declaring class's name.</summary>
+    /// <value>The name provided by <c>meta.Target.Method.DeclaringType.Name</c>.</value>
+    public string ClassName { get; } = className;
+
     /// <summary>Gets included parameter names paired with values in declaration order.</summary>
     /// <remarks>Masked parameter entries retain their names and hold replacement metadata until argument formatting.</remarks>
     /// <value>Named arguments, or <see langword="null"/> for contexts created with the positional constructor.</value>
     public IReadOnlyList<KeyValuePair<string, object?>>? NamedArguments { get; private init; }
-
-    /// <summary>Gets the declaring class's name.</summary>
-    /// <value>The name provided by <c>meta.Target.Method.DeclaringType.Name</c>.</value>
-    public string ClassName { get; } = className;
 
     /// <summary>Gets the intercepted method's name.</summary>
     /// <value>The name provided by <c>meta.Target.Method.Name</c>.</value>

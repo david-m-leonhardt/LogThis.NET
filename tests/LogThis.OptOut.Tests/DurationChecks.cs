@@ -1,11 +1,12 @@
-using System.Diagnostics;
 using LogThis.Attributes;
 using LogThis.Entities;
 using LogThis.Interfaces;
 using LogThis.Middleware;
+using LogThis.Utility;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 /// <summary>Checks optional duration fields without relying on scheduling thresholds.</summary>
 public static class DurationChecks

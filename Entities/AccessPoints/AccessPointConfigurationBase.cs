@@ -2,7 +2,7 @@
 using LogThis.Interfaces;
 using Microsoft.Extensions.Logging;
 
-namespace LogThis.Entities
+namespace LogThis.Entities.AccessPoints
 {
     /// <summary>Shared defaults for entry, exit, and exception event configuration.</summary>
     internal abstract class AccessPointConfigurationBase : IAccessPointConfiguration

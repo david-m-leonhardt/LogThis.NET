@@ -11,10 +11,13 @@ namespace LogThis.Extensions
         private static readonly HashSet<string> ReservedNames = new(
             new[]
             {
+                MessageComponents.OnDemandExceptionLabel,
+                MessageComponents.OnDemandLabel,
                 MessageComponents.OnEntryLabel,
                 MessageComponents.OnExitLabel,
                 MessageComponents.OnExceptionLabel,
                 MessageComponents.LogThisClass,
+                MessageComponents.LogThisMessage,
                 MessageComponents.LogThisMethod,
                 MessageComponents.LogThisArguments,
                 MessageComponents.LogThisReturnValue,

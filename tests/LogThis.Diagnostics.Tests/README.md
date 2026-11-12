@@ -13,7 +13,7 @@ missing/duplicate reports, and unexpected warnings on valid declarations.
 The standalone build contains no LogThis usage. It checks property, nested
 property, method-parameter, and constructor-parameter conflicts, plus excluded
 return masking. The complete build adds method conflicts and default/named
-profile comparisons, including whitespace/case normalization, explicit default
+profile comparisons, including literal whitespace/case distinctions, explicit default
 selection, different names, nonpublic methods, and excluded methods. No runtime
 configuration is needed or consulted by these diagnostics.
 

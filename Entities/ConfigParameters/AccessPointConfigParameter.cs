@@ -9,11 +9,13 @@ namespace LogThis.Entities.ConfigParameters
         #region Private Properties
 
         /// <summary>Maps event kinds to their library-owned structured placeholders.</summary>
-        private Dictionary<AccessPointEventKind, string> EventKingLabelMap = new()
+        private readonly Dictionary<AccessPointEventKind, string> EventKingLabelMap = new()
         {
             { AccessPointEventKind.Entry, MessageComponents.OnEntryLabel },
             { AccessPointEventKind.Exception, MessageComponents.OnExceptionLabel },
-            { AccessPointEventKind.Exit, MessageComponents.OnExitLabel }
+            { AccessPointEventKind.Exit, MessageComponents.OnExitLabel },
+            { AccessPointEventKind.OnDemand, MessageComponents.OnDemandLabel },
+            { AccessPointEventKind.OnDemandException, MessageComponents.OnDemandExceptionLabel }
         };
 
         /// <summary>Structured placeholder chosen for this event.</summary>
@@ -34,7 +36,7 @@ namespace LogThis.Entities.ConfigParameters
         /// <param name="runtimeValues">Event settings and selected runtime state used to choose the message placeholder.</param>
         public AccessPointConfigParameter(LogThisRuntimeValues runtimeValues) : base(runtimeValues)
         {
-            _message = EventKingLabelMap[runtimeValues.AccessPoint.EventKind];
+            _message = EventKingLabelMap[runtimeValues.EventKind];
             Obj = runtimeValues.AccessPoint.AccessPointMessage;
             ShouldAddValue = true;
         }

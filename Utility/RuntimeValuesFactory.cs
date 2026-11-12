@@ -1,11 +1,30 @@
-﻿using LogThis.Interfaces;
+using LogThis.Entities;
+using LogThis.Enum;
+using LogThis.Interfaces;
 
-namespace LogThis.Entities
+namespace LogThis.Utility
 {
     /// <summary>Prepares event-specific invocation data without serializing application values.</summary>
     internal static class RuntimeValuesFactory
     {
         #region Internal Methods
+
+        /// <summary>Prepares an explicit event with optional supplied values and exception.</summary>
+        internal static LogThisRuntimeValues BuildOnDemandValues(LogThisRuntime runtime, string memberName,
+            string? message, object?[]? values, bool isException, Exception? exception)
+        {
+            LogThisMethodContext context = new(memberName, string.Empty, values ?? []);
+            IAccessPointConfiguration settings = isException
+                ? runtime.Configuration.OnDemandExceptionConfig ?? runtime.Configuration.OnExceptionConfig
+                : runtime.Configuration.OnDemandConfig;
+            LogThisRuntimeValues runtimeValues = BuildRuntimeValues(settings, context, runtime);
+            runtimeValues.EventKindOverride = isException ? AccessPointEventKind.OnDemandException : null;
+            runtimeValues.Exception = exception;
+            runtimeValues.Arguments = values;
+            runtimeValues.Message = message;
+
+            return runtimeValues;
+        }
 
         /// <summary>Prepares entry-event settings and the invocation's included arguments.</summary>
         /// <param name="context">Method identity and captured argument metadata.</param>

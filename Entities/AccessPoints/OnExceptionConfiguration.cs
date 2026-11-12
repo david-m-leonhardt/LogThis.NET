@@ -2,7 +2,7 @@
 using LogThis.Enum;
 using Microsoft.Extensions.Logging;
 
-namespace LogThis.Entities
+namespace LogThis.Entities.AccessPoints
 {
     /// <summary>Defaults for the exception event, including its error level.</summary>
     internal sealed class OnExceptionConfiguration() : AccessPointConfigurationBase
@@ -21,6 +21,5 @@ namespace LogThis.Entities
         public override LogLevel LogLevel { get; set; } = LogLevel.Error;
 
         #endregion
-
     }
 }

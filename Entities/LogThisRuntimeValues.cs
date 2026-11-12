@@ -1,4 +1,5 @@
-﻿using LogThis.Interfaces;
+using LogThis.Enum;
+using LogThis.Interfaces;
 
 namespace LogThis.Entities
 {
@@ -9,6 +10,15 @@ namespace LogThis.Entities
 
         /// <summary>Event kind, message, enabled state, and severity for this event.</summary>
         internal required IAccessPointConfiguration AccessPoint { get; set; }
+
+        /// <summary>Overrides event identity when settings come from another access point.</summary>
+        internal AccessPointEventKind? EventKindOverride { get; set; }
+
+        /// <summary>Effective event identity used to select structured components.</summary>
+        internal AccessPointEventKind EventKind => EventKindOverride ?? AccessPoint.EventKind;
+
+        /// <summary>Whether this event was requested explicitly.</summary>
+        internal bool IsOnDemand => EventKind is AccessPointEventKind.OnDemand or AccessPointEventKind.OnDemandException;
 
         /// <summary>Included argument payload for entry or exception events; null for exit events.</summary>
         internal object?[]? Arguments { get; set; }
@@ -24,6 +34,9 @@ namespace LogThis.Entities
 
         /// <summary>Whether enabled successful-result capture should use a replacement instead of the result.</summary>
         internal bool MaskReturn { get; set; } = false;
+
+        /// <summary>Optional literal on-demand message; null, empty, or whitespace-only text omits the message component.</summary>
+        internal string? Message { get; set; }
 
         /// <summary>Literal return mask, or null to use the selected configuration's JsonMaskValue.</summary>
         internal string? ReturnReplacement { get; set; } = null;

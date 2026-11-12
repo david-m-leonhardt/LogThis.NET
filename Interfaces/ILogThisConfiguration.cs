@@ -1,8 +1,9 @@
-﻿namespace LogThis.Interfaces
+namespace LogThis.Interfaces
 {
     /// <summary>Options shared by the aspect, message builder, and runtime logger.</summary>
     public interface ILogThisConfiguration
     {
+
         #region Properties
 
         /// <summary>Whether internal logging failures are written to the console at Debug level.</summary>
@@ -18,15 +19,6 @@
         /// <remarks>Also used by MaskThisInLogs without an explicit replacement. Applies per capture without mutating application values.</remarks>
         /// <value>The text substituted for each matched field value.</value>
         string JsonMaskValue { get; set; }
-
-        /// <summary>Limits completed captured payloads after masking; false permits unlimited output.</summary>
-        /// <value><see langword="true"/> by default.</value>
-        bool TruncateCapturedValues { get; set; }
-
-        /// <summary>Positive preview length in .NET string-length units, excluding wrapper and escaping overhead.</summary>
-        /// <remarks>Required to be positive even when truncation is disabled; surrogate pairs are not split.</remarks>
-        /// <value>4096 by default.</value>
-        int MaxCapturedValueLength { get; set; }
 
         /// <summary>Whether to include the declaring class name.</summary>
         /// <value><see langword="true"/> to add a class component.</value>
@@ -69,12 +61,18 @@
         /// <value><see langword="false"/> by default.</value>
         bool LogTraceId { get; set; }
 
+        /// <summary>Positive preview length in .NET string-length units, excluding wrapper and escaping overhead.</summary>
+        /// <remarks>Required to be positive even when truncation is disabled; surrogate pairs are not split.</remarks>
+        /// <value>4096 by default.</value>
+        int MaxCapturedValueLength { get; set; }
+
         /// <summary>Custom properties added to every log event.</summary>
         /// <remarks>
         /// Names are validated at configuration resolution and copied when the scope factory is created.
         /// Later dictionary edits no longer affect that factory's events; referenced values are not cloned.
         /// Reserved names (case-insensitive, with or without braces) are LogThisOnEntry, LogThisOnExit,
-        /// LogThisOnException, LogThisClass, LogThisMethod, LogThisArguments, LogThisReturnValue,
+        /// LogThisOnException, LogThisOnDemand, LogThisOnDemandException, LogThisMessage,
+        /// LogThisClass, LogThisMethod, LogThisArguments, LogThisReturnValue,
         /// LogThisDurationMs, LogThisCorrelationId, LogThisTraceId, and LogThisSpanId, even when the corresponding feature is disabled.
         /// </remarks>
         /// <value>Message-template placeholders mapped to their values.</value>
@@ -83,6 +81,12 @@
         /// <summary>Separator between message-template components.</summary>
         /// <value>The text placed between adjacent components.</value>
         string MessageDelimeter { get; set; }
+
+        /// <summary>On-demand event settings; enabled at Information with text OnDemand by default.</summary>
+        IAccessPointConfiguration OnDemandConfig { get; set; }
+
+        /// <summary>Optional settings for explicit exception events. Null uses OnExceptionConfig.</summary>
+        IAccessPointConfiguration? OnDemandExceptionConfig { get; set; }
 
         /// <summary>Entry-event settings.</summary>
         /// <value>Message, enabled state, and severity for method entry.</value>
@@ -95,6 +99,10 @@
         /// <summary>Exit-event settings.</summary>
         /// <value>Message, enabled state, and severity for successful method exit.</value>
         IAccessPointConfiguration OnExitConfig { get; set; }
+
+        /// <summary>Limits completed captured payloads after masking; false permits unlimited output.</summary>
+        /// <value><see langword="true"/> by default.</value>
+        bool TruncateCapturedValues { get; set; }
 
         #endregion
 

@@ -1,4 +1,5 @@
 using LogThis.Interfaces;
+using LogThis.Utility;
 using Microsoft.Extensions.Logging;
 
 namespace LogThis.Entities;
@@ -84,7 +85,7 @@ internal static class LogThisRuntimeContext
     #region Internal Class
 
     /// <summary>Coordinates one cryptographic generation attempt across all scopes and methods in a chain.</summary>
-    public sealed class CorrelationState(Func<string> generateId)
+    internal sealed class CorrelationState(Func<string> generateId)
     {
         #region Private Fields
 

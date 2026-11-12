@@ -1,24 +1,37 @@
 using LogThis.Constants;
 using LogThis.Interfaces;
+using LogThis.Utility;
 
 namespace LogThis.Entities
 {
     /// <summary>Builds a logging template and its positional arguments in matching order.</summary>
     public class LogParameters
     {
+        #region Intneral Properties
+
+        /// <summary>Gets a snapshot of values for the structured logging placeholders.</summary>
+        /// <value>A new array containing the values added so far.</value>
+        internal object[] Args => [.. _args];
+
+        /// <summary>The complete delimited message template.</summary>
+        /// <value>Message fragments joined with the configured delimiter.</value>
+        internal string Message => string.Join(messageDelimiter, _messages);
+
+        #endregion
+
         #region Private Properties
-
-        /// <summary>Component-label preference captured when the event template is constructed.</summary>
-        private readonly bool hasComponentLabels;
-
-        /// <summary>Selected delimiter used to join this event's message fragments.</summary>
-        private readonly string messageDelimiter;
 
         // Values correspond positionally to the placeholders in _messages.
         private readonly List<object> _args = [];
 
         // The delimiter is applied only when the final template is requested.
         private readonly List<string> _messages = [];
+
+        /// <summary>Component-label preference captured when the event template is constructed.</summary>
+        private readonly bool hasComponentLabels;
+
+        /// <summary>Selected delimiter used to join this event's message fragments.</summary>
+        private readonly string messageDelimiter;
 
         #endregion
 
@@ -33,12 +46,29 @@ namespace LogThis.Entities
 
             ConfigParamFactory.BuildConfigParameters(runtimeValues).ForEach(Add);
 
+            if (!string.IsNullOrWhiteSpace(runtimeValues.Message))
+            {
+                _messages.Add(MessageComponents.LogThisMessage);
+                _args.Add(runtimeValues.Message);
+            }
+
             AddMessageComponents(runtimeValues.Runtime.MessageComponents);
         }
 
         #endregion
 
         #region Internal Methods
+
+        /// <summary>Appends an eligible component's placeholder and value together to preserve their alignment.</summary>
+        /// <param name="configParam">Prepared component and its inclusion decision.</param>
+        internal void Add(IConfigParameter configParam)
+        {
+            if (configParam.ShouldAddValue)
+            {
+                _messages.Add(FormatComponentWithLabel(configParam.Message));
+                _args.Add(configParam.Obj!);
+            }
+        }
 
         /// <summary>Normalizes and validates a detached copy of custom components before logging starts.</summary>
         /// <param name="components">Configured custom names and values.</param>
@@ -53,30 +83,7 @@ namespace LogThis.Entities
 
         #endregion
 
-        #region Public Properties
-
-        /// <summary>Gets a snapshot of values for the structured logging placeholders.</summary>
-        /// <value>A new array containing the values added so far.</value>
-        public object[] Args => [.. _args];
-
-        /// <summary>The complete delimited message template.</summary>
-        /// <value>Message fragments joined with the configured delimiter.</value>
-        public string Message => string.Join(messageDelimiter, _messages);
-
-        #endregion
-
         #region Private Methods
-
-        /// <summary>Appends an eligible component's placeholder and value together to preserve their alignment.</summary>
-        /// <param name="configParam">Prepared component and its inclusion decision.</param>
-        internal void Add(IConfigParameter configParam)
-        {
-            if (configParam.ShouldAddValue)
-            {
-                _messages.Add(FormatComponentWithLabel(configParam.Message));
-                _args.Add(configParam.Obj!);
-            }
-        }
 
         /// <summary>Appends custom placeholders and their values in matching order.</summary>
         /// <param name="messageComponents">Structured placeholders mapped to values.</param>
