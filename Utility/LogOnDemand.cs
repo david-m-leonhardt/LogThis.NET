@@ -42,11 +42,11 @@ namespace LogThis.Utility
             {
                 return;
             }
-            
+
             // Profile selection errors deliberately propagate.
             using IDisposable? selection = SelectProfile(profile);
             LogThisRuntime runtime = LogThisRuntimeContext.Current!;
-            
+
             try
             {
                 Write(RuntimeValuesFactory.BuildOnDemandValues(runtime, memberName, message, values, isException, exception));
